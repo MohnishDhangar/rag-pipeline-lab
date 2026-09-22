@@ -1,0 +1,363 @@
+{
+  "metadata": {
+    "description": "Unified RAGAS evaluation question set for the RAG Lab project, merging batch 1 (5-paper seed set), batch 2 (3-paper extension), and batch 3 (4-paper extension) into a single consolidated corpus.",
+    "total_documents": 11,
+    "total_questions": 63,
+    "papers": [
+      {
+        "short_id": "dist_pinn_dd",
+        "title": "Distributed physics-informed neural networks via domain decomposition for fast flow reconstruction",
+        "authors": "Yixiao Qian, Jiaxu Liu, Zewei Xia, Song Chen, Chao Xu, Shengze Cai",
+        "venue": "Preprint (arXiv:2602.15883v1)",
+        "file": "Distributed_physics-informed_neural_networks_via_domain_decomposition_for_fast_flow_reconstruction.pdf"
+      },
+      {
+        "short_id": "gns",
+        "title": "Learning to Simulate Complex Physics with Graph Networks",
+        "authors": "Alvaro Sanchez-Gonzalez, Jonathan Godwin, Tobias Pfaff, Rex Ying, Jure Leskovec, Peter W. Battaglia",
+        "venue": "ICML 2020",
+        "file": null
+      },
+      {
+        "short_id": "meshgraphnets",
+        "title": "Learning Mesh-Based Simulation with Graph Networks",
+        "authors": "Tobias Pfaff, Meire Fortunato, Alvaro Sanchez-Gonzalez, Peter W. Battaglia",
+        "venue": "ICLR 2021",
+        "file": "LEARNING_MESH-BASED_SIMULATION_WITH_GRAPH_NETWORKS.pdf"
+      },
+      {
+        "short_id": "ntk_pinn",
+        "title": "When and Why PINNs Fail to Train: A Neural Tangent Kernel Perspective",
+        "authors": "Sifan Wang, Xinling Yu, Paris Perdikaris",
+        "venue": "2020 preprint",
+        "file": null
+      },
+      {
+        "short_id": "orig_pinn",
+        "title": "Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations",
+        "authors": "M. Raissi, P. Perdikaris, G.E. Karniadakis",
+        "venue": "Journal of Computational Physics 378 (2019) 686-707",
+        "file": null
+      },
+      {
+        "short_id": "pignn_accel",
+        "title": "Towards Accelerating Physics Informed Graph Neural Network for Fluid Simulation",
+        "authors": "Yidi Wang, Frank Guan, Malcolm Yoke Hean Low, Zhengkui Wang, Aik Beng Ng, Simon See",
+        "venue": "SIGGRAPH Asia 2024 Posters",
+        "file": "3681756_3697879.pdf"
+      },
+      {
+        "short_id": "pignn_al",
+        "title": "Active Learning with Physics-Informed Graph Neural Networks on Unstructured Meshes",
+        "authors": "Jens Decke, Alexander Heinen, Bernhard Sick, Christian Gruhl",
+        "venue": "IAL@ECML-PKDD 2024 (CEUR Workshop Proceedings Vol. 3770)",
+        "file": "Active_Learning_with_Physics-Informed_Graph_Neural.pdf"
+      },
+      {
+        "short_id": "pignn_fd",
+        "title": "Combining Physics-Informed Graph Neural Network and Finite Difference for Solving Forward and Inverse Spatiotemporal PDEs",
+        "authors": "Hao Zhang, Longxiang Jiang, Xinkun Chu, Yong Wen, Luxiong Li, Yonghao Xiao, Liyuan Wang",
+        "venue": "Preprint, China Academy of Engineering Physics (arXiv:2405.20000v3)",
+        "file": "COMBINING_PHYSICS-INFORMED_GRAPH_NEURAL.pdf"
+      },
+      {
+        "short_id": "pinn_gnn_pue",
+        "title": "PINN-GNN Hybrid Neural Networks for Precise PUE Prediction in Data Centers",
+        "authors": "Wu, Cui, Shi",
+        "venue": "2026",
+        "file": null
+      },
+      {
+        "short_id": "sk_pinn",
+        "title": "SK-PINN: Accelerated physics-informed deep learning by smoothing kernel gradients",
+        "authors": "Cunliang Pan, Chengxuan Li, Yu Liu, Yonggang Zheng, Hongfei Ye",
+        "venue": "Preprint (Dalian University of Technology)",
+        "file": "SK-PINN__Accelerated_physics-informed_deep_learning_by_smoothing_kernel_gradients.pdf"
+      },
+      {
+        "short_id": "xpinn",
+        "title": "Extended Physics-Informed Neural Networks (XPINNs): A Generalized Space-Time Domain Decomposition Based Deep Learning Framework for Nonlinear Partial Differential Equations",
+        "authors": "Ameya D. Jagtap, George Em Karniadakis",
+        "venue": "Commun. Comput. Phys. 28(5), 2020",
+        "file": "CiCP_v28i5_2002-2041.pdf"
+      }
+    ],
+    "source_batches": [
+      {
+        "batch": 1,
+        "id_prefix": "b1_",
+        "origin_file": "ragas_eval_questions_batch2.json",
+        "note": "Originally a flat array with question_type using hyphens (e.g. \"single-document\"); normalized here to underscore style and object schema. XPINN questions from this batch (b1_xpinn_01, b1_xpinn_02) refer to the same paper as the fuller xpinn coverage added in batch 2 -- kept as additional questions, not duplicates."
+      },
+      {
+        "batch": 2,
+        "id_prefix": "b2_",
+        "origin_file": "eval_questions_batch2.json",
+        "note": "Introduced full-paper XPINN coverage plus PIGNN active-learning and SK-PINN papers."
+      },
+      {
+        "batch": 3,
+        "id_prefix": "b3_",
+        "origin_file": "ragas_eval_questions_batch3.json (generated this session)",
+        "note": "Introduced 4 new papers: accelerated multi-GNN PIGNN, MeshGraphNets, finite-difference PIGNN, and distributed PINN domain decomposition."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "id": "b1_cross_01",
+      "question_type": "cross_document",
+      "difficulty": null,
+      "source_documents": [
+        "ntk_pinn",
+        "orig_pinn"
+      ],
+      "question": "Both the NTK-PINN paper and the original Raissi et al. PINNs paper address PINN training difficulties \u2014 how does each paper characterize the source of the difficulty differently?",
+      "ground_truth": "The Raissi et al. paper treats the MSE_f residual term primarily as a regularization mechanism that constrains the space of admissible solutions and enables data-efficient learning; its main practical concerns are the choice of optimizer (L-BFGS for small data), the number of collocation points needed (motivating the discrete-time Runge-Kutta formulation to avoid a large N_f), and network capacity. The NTK-PINN paper (Wang, Yu, Perdikaris) instead identifies a specific mathematical mechanism for training failure: PINNs suffer from spectral bias (slow learning of high-frequency components) and, more fundamentally, from a discrepancy in convergence rates between different loss components (e.g., boundary loss vs. PDE residual loss), driven by an imbalance in the eigenvalues of the NTK sub-blocks K_uu and K_rr. This diagnosis leads directly to their proposed fix (NTK-eigenvalue-based adaptive loss weighting), whereas the original PINNs paper does not diagnose or address this eigenvalue-imbalance mechanism."
+    },
+    {
+      "id": "b1_cross_02",
+      "question_type": "cross_document",
+      "difficulty": null,
+      "source_documents": [
+        "pinn_gnn_pue",
+        "xpinn"
+      ],
+      "question": "The PINN-GNN PUE paper and the XPINN paper both use decomposition to scale physics-informed learning \u2014 contrast how each defines its 'subdomains' and how physics constraints are enforced across them.",
+      "ground_truth": "XPINN decomposes a continuous spatio-temporal PDE domain into arbitrary spatial/temporal subdomains, each handled by its own independently-sized neural network, with physics (the governing PDE) enforced via residual loss terms within each subdomain and interface conditions enforcing continuity/flux consistency across subdomain boundaries. PINN-GNN, in contrast, does not decompose a continuous domain \u2014 instead its 'nodes' are a discrete, heterogeneous graph of real physical devices (IT equipment, cooling units, sensors) connected by edges reflecting physical adjacency and thermal coupling; a single shared GAT encoder and power-prediction MLP operate over this whole graph, and physics is enforced not via a PDE residual per subdomain but via two soft regularization loss terms (energy proportionality and graph-Laplacian-based thermal diffusion) applied globally across the graph structure."
+    },
+    {
+      "id": "b1_cross_03",
+      "question_type": "cross_document",
+      "difficulty": null,
+      "source_documents": [
+        "gns",
+        "orig_pinn"
+      ],
+      "question": "GNS uses learned message-passing without an explicit PDE residual loss, while PINNs enforce PDE residuals directly via automatic differentiation \u2014 what trade-off does this imply for generalization outside the training distribution?",
+      "ground_truth": "PINNs (Raissi et al.) bake the governing PDE directly into the loss via automatic differentiation, so the learned solution is explicitly constrained to satisfy known physics at every collocation point; this gives strong guarantees within the modeled equation's validity but requires the governing PDE to be known and explicitly written down. GNS instead learns particle-particle interactions purely from data, with no explicit PDE residual \u2014 physical structure enters only implicitly, through inductive biases like the relative (spatially-invariant) encoder and message-passing locality. The paper shows this lets GNS generalize well beyond its training distribution (e.g., far more particles, much larger spatial domains, longer rollouts, unseen object shapes) without needing the underlying equations to be specified, but this generalization is empirical rather than provable \u2014 unlike a PINN, there is no explicit residual guaranteeing consistency with a known physical law."
+    },
+    {
+      "id": "b1_cross_04",
+      "question_type": "cross_document",
+      "difficulty": null,
+      "source_documents": [
+        "ntk_pinn",
+        "xpinn",
+        "pinn_gnn_pue"
+      ],
+      "question": "Three of the papers each propose a way to reweight or restructure the PINN loss to fix training imbalance \u2014 summarize the three distinct mechanisms and identify which is most directly comparable to GNS's use of training noise as an implicit regularizer.",
+      "ground_truth": "The three mechanisms are: (1) NTK-PINN's adaptive loss weighting, which computes lambda_b and lambda_r from the trace ratios of the NTK sub-blocks K_uu and K_rr at each training step to explicitly balance convergence rates; (2) XPINN's spatial/temporal domain decomposition, which sidesteps loss imbalance by giving each subdomain its own independently-sized network so a complex subregion doesn't have to share capacity with simple subregions; and (3) PINN-GNN's soft physics-informed regularization terms (energy proportionality and thermal evolution losses), added to the data loss with fixed hyperparameter weights lambda_1 and lambda_2 chosen via grid search, rather than dynamically adapted during training. Of these, none is a close mechanistic match to GNS's training noise \u2014 GNS's noise injection is not a loss-reweighting scheme but a data-augmentation technique that closes the train/rollout distribution gap; if anything it is closest in spirit to PINN-GNN's fixed regularization terms in that both are static, hyperparameter-controlled interventions decided before training rather than adaptively computed like NTK-PINN's scheme."
+    },
+    {
+      "id": "b2_cross_001",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "xpinn",
+        "sk_pinn"
+      ],
+      "question": "Both XPINN and SK-PINN aim to reduce PINN training cost, but they attack fundamentally different bottlenecks. Contrast their core strategies and identify one way they could plausibly be combined.",
+      "ground_truth": "XPINN reduces training cost via space-time domain decomposition: splitting the domain into subdomains, each trained by a smaller, independently-configured Sub-Net, enabling parallelization and letting network capacity be matched to local solution complexity \u2014 but it still relies on standard automatic differentiation (AD) within each Sub-Net for computing PDE residuals. SK-PINN instead keeps a single (or per-subdomain) network but replaces AD itself with smoothing-kernel-based derivative approximation (via the RKGM formula), which lowers memory use and per-iteration cost, particularly as collocation point counts grow. The two approaches are largely orthogonal and could plausibly be combined by using SK-style kernel gradients inside each XPINN Sub-Net instead of AD \u2014 potentially compounding XPINN's parallelization/representation benefits with SK-PINN's lower per-subdomain training cost, especially for subdomains with dense collocation points, while possibly still using AD (as in Coupled-PINN) near interfaces or regions with sharp gradients where kernel-derivative error is highest."
+    },
+    {
+      "id": "b2_cross_002",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "xpinn",
+        "pignn_al"
+      ],
+      "question": "Both XPINN and the PIGNN active-learning paper handle irregular/complex spatial domains, but with different mechanisms. How does each paper's mechanism address non-uniform representational needs across the domain?",
+      "ground_truth": "XPINN addresses non-uniform representational needs by explicit domain decomposition: the modeler manually partitions the domain into subdomains and assigns each an independently tunable Sub-Net (different depth, width, activation, residual point density), so regions needing more complex solution representation get more powerful networks and smoother regions get shallower ones. The PIGNN active-learning paper instead uses a single graph neural network (with ChebConv layers) over an unstructured triangular mesh that already conforms to the domain's geometry, and addresses non-uniform difficulty *adaptively during training* via active learning: it queries additional ground-truth samples in whichever regions currently show the highest physics-loss residual, rather than pre-partitioning the domain or hand-tuning per-region network capacity. In short, XPINN's non-uniformity handling is architectural and decided up front; the PIGNN paper's is data-driven and decided iteratively during training."
+    },
+    {
+      "id": "b2_cross_003",
+      "question_type": "cross_document",
+      "difficulty": "medium",
+      "source_documents": [
+        "pignn_al",
+        "sk_pinn"
+      ],
+      "question": "Both the PIGNN active-learning paper and SK-PINN had to solve the same underlying technical problem: computing spatial derivatives (specifically a Laplacian) without relying on standard automatic differentiation on unstructured/irregular point sets. Compare their solutions.",
+      "ground_truth": "The PIGNN paper adapts the MeshGradientPy package (originally for TensorFlow, ported to PyTorch) to estimate field gradients per triangular mesh cell via linear interpolation, then averages these onto vertices to approximate the Laplacian needed for the Poisson equation's physics loss \u2014 this is mesh-topology-based (it uses the explicit triangle connectivity of the unstructured mesh). SK-PINN instead uses smoothed-particle-hydrodynamics-style kernel approximation (culminating in the RKGM formula), which treats collocation points as SPH particles and computes derivatives via a kernel function over neighboring points within a support radius, without requiring explicit mesh/triangle connectivity \u2014 making it applicable to arbitrarily scattered point clouds, not just triangulated meshes. Both approaches share the same motivation (AD struggles with irregular connectivity/is computationally expensive) but differ in whether they exploit explicit mesh structure (PIGNN paper) or a mesh-free kernel neighborhood (SK-PINN)."
+    },
+    {
+      "id": "b2_cross_004",
+      "question_type": "cross_document",
+      "difficulty": "medium",
+      "source_documents": [
+        "xpinn",
+        "pignn_al",
+        "sk_pinn"
+      ],
+      "question": "All three papers in this batch propose ways to make physics-informed neural network training more efficient or scalable. Categorize each paper's primary lever for achieving this (architecture/decomposition, data efficiency, or computational/derivative method), and note which two share the most similar underlying lever.",
+      "ground_truth": "XPINN's primary lever is architectural/decomposition: splitting the domain and network into subdomains for parallelization and localized representation capacity. The PIGNN active-learning paper's primary lever is data efficiency: using an unsupervised physics-residual-based query strategy to minimize the number of expensive ground-truth (FEM) simulations needed. SK-PINN's primary lever is computational/derivative-method efficiency: replacing automatic differentiation with smoothing-kernel gradient approximation to cut per-iteration cost and memory use. Of the three, XPINN and SK-PINN share the most similar underlying lever in the sense that both are direct interventions on the *training/architecture mechanics* of the PINN itself (how the network is structured and how derivatives/residuals are computed), whereas the PIGNN paper's lever operates one level up, on *which data the model is trained on*, independent of the underlying network or derivative computation method."
+    },
+    {
+      "id": "b3_cross_005",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "pignn_accel",
+        "meshgraphnets"
+      ],
+      "question": "Both the accelerated multi-GNN PIGNN paper and MeshGraphNets build on Sanchez-Gonzalez et al.'s graph network simulation work, but pursue different goals. Contrast what each paper optimizes for and the mechanism it uses.",
+      "ground_truth": "The multi-GNN PIGNN paper optimizes purely for training efficiency of a physics-informed (soft-constrained) thermodynamics-based GNN: it keeps the same physical formulation and mesh representation as Hern\u00e1ndez et al.'s original PIGNN but splits a single shared processor into four dedicated per-parameter processors trained in parallel, then applies mixed-precision training with loss scaling, cutting both training epochs and wall-clock time roughly to a quarter of the original while holding accuracy fixed. MeshGraphNets, in contrast, optimizes for generality and physical fidelity across a wide range of systems (cloth, structural mechanics, incompressible and compressible fluids) using an encode-process-decode GNN operating in both mesh-space and world-space, with adaptive remeshing learned via a sizing field, and its core efficiency claim is being 1-2 orders of magnitude faster than the ground-truth numerical solvers it was trained on rather than being faster than a prior GNN baseline. In short, the PIGNN paper accelerates one specific existing PIGNN architecture, while MeshGraphNets is a broader architectural framework whose main speed comparison is against classical solvers, not another GNN."
+    },
+    {
+      "id": "b3_cross_006",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "pignn_fd",
+        "meshgraphnets"
+      ],
+      "question": "Both this paper's PIGNN (finite-difference-based) and MeshGraphNets predict dynamics iteratively on graphs derived from meshes, but they differ fundamentally in supervision and differential operator computation. Compare the two approaches.",
+      "ground_truth": "The finite-difference PIGNN computes spatial derivatives (gradient, Laplacian) directly on the graph using least-squares finite-difference approximations over one-ring neighbors, and for the forward problem trains in a fully unsupervised manner by minimizing PDE residuals at collocation points, requiring zero labeled training data (only initial/boundary conditions plus the known governing equation). MeshGraphNets instead relies entirely on supervised learning: it trains an encode-process-decode network via a per-node L2 loss against ground-truth data from a numerical simulator at each next time step, with no explicit PDE residual or finite-difference computation anywhere in its loss \u2014 physical structure enters only implicitly via relative/spatially-equivariant encoding and message passing along mesh (and world) edges. As a result, the finite-difference PIGNN needs the governing PDE to be known explicitly but no simulation training data, whereas MeshGraphNets needs no explicit PDE but does need a large labeled dataset of ground-truth trajectories."
+    },
+    {
+      "id": "b3_cross_007",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "pignn_fd",
+        "dist_pinn_dd"
+      ],
+      "question": "Both this paper's PIGNN and the distributed PINN domain-decomposition paper handle inverse problems with unknown physical parameters. Compare how each formulates and solves its inverse problem.",
+      "ground_truth": "The finite-difference PIGNN's inverse problem infers unknown scalar PDE parameters (e.g., a coefficient lambda in the heat equation) by combining a PDE residual loss with a data loss on sparse observations, weighted by a hyperparameter gamma that is annealed from favoring physics early in training toward favoring data later; it demonstrates this on a single-domain (undistributed) heat equation, correctly recovering the true parameter from as little as 0.67% of the total mesh nodes as training data. The distributed PINN paper's core inverse-problem challenge is instead recovering full velocity and pressure fields from sparse experimental (PIV/PTV) observations across a large spatiotemporal domain split into many sub-networks, where the main technical difficulty is not a single unknown scalar parameter but the pressure field's gauge freedom (unknown additive constant) becoming inconsistent across independently-trained sub-domains \u2014 solved via reference anchor normalization rather than the gamma-weighted joint minimization the finite-difference PIGNN uses. In short, both blend a PDE-residual loss with an observational data loss to handle missing information, but the finite-difference PIGNN's unknown is a scalar PDE coefficient solved on one domain, while the distributed PINN's core unknown is a spatially-varying field-level gauge offset that only emerges because the domain is decomposed across many independent networks."
+    },
+    {
+      "id": "b3_cross_008",
+      "question_type": "cross_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "pignn_accel",
+        "meshgraphnets",
+        "dist_pinn_dd"
+      ],
+      "question": "All three of these papers address computational cost in physics-based neural simulation, but at different levels of the system (numerical precision, network/domain architecture, or hardware execution). Categorize each paper's primary efficiency lever and identify which two are most similar.",
+      "ground_truth": "The multi-GNN PIGNN paper's primary lever is numerical/architectural: splitting a shared processor into per-parameter processors (architecture) combined with mixed-precision (FP16) training and loss scaling (numerical precision) to cut training time to about a quarter of baseline. MeshGraphNets' primary lever is architectural/algorithmic: an encode-process-decode graph network operating on both mesh-space and world-space edges, using much larger integration timesteps than classical solvers and avoiding solver-specific performance bottlenecks, yielding 1-2 orders of magnitude speedup over ground-truth solvers. The distributed PINN paper's primary levers are domain decomposition (splitting the spatiotemporal domain across independent local-expert sub-networks trained in parallel) combined with hardware-level execution optimization (CUDA Graphs and JIT compilation to reduce CPU-side autograd overhead). Of the three, the multi-GNN PIGNN paper and the distributed PINN paper are most similar in spirit, since both keep the same underlying model class fixed and instead attack a specific hardware/numerical execution bottleneck (mixed-precision and loss scaling for the former; CUDA Graphs and JIT compilation for the latter) alongside a parallelization/decomposition strategy (multiple processors vs. multiple sub-domains), whereas MeshGraphNets' speedup instead comes from being an entirely different, larger-timestep learned architecture compared against classical numerical solvers rather than against another neural baseline."
+    },
+    {
+      "id": "b3_meshgraphnets_005",
+      "question_type": "single_document",
+      "difficulty": "medium",
+      "source_documents": [
+        "meshgraphnets"
+      ],
+      "question": "How well did the model trained on the FLAGDYNAMIC domain generalize to the WindSock experiment, and what does this demonstrate?",
+      "ground_truth": "A model trained only on the FLAGDYNAMIC domain with simple rectangular cloth was tested on a windsock with tassels \u2014 a non-flat starting state never seen during training, with a mesh averaging 20k nodes, an order of magnitude more than seen in training. The model generalized successfully, producing plausible dynamics and adaptive remeshing on this much larger and more complex setup. This demonstrates the strength of learning resolution- and scale-independent dynamics: the model does not need to be trained on costly high-resolution simulation data to handle large systems at inference time."
+    },
+    {
+      "id": "b1_gns_02",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "gns"
+      ],
+      "question": "Which architecture/training choices had the largest measured impact on GNS rollout accuracy, according to the ablation study on the GOOP domain?",
+      "ground_truth": "The paper identifies five factors with substantial impact: (1) the number of message-passing steps (more steps improves accuracy since it allows longer-range interactions); (2) unshared vs. shared PROCESSOR GN parameters (unshared parameters yield better accuracy, especially for rollouts); (3) the connectivity radius (larger radius yields lower error by allowing longer-range communication); (4) the scale of training noise (rollout accuracy is best at an intermediate noise scale); and (5) relative vs. absolute ENCODER (the relative encoder, which imposes spatial-invariance inductive bias, is clearly better)."
+    },
+    {
+      "id": "b1_ntk_pinn_02",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "ntk_pinn"
+      ],
+      "question": "According to the paper's adaptive algorithm (Algorithm 1), how are the weights lambda_b and lambda_r computed from the NTK at each update step?",
+      "ground_truth": "lambda_b is computed as the trace of the full NTK K(n) divided by the trace of K_uu(n) (the sum of all eigenvalues divided by the sum of the boundary-block eigenvalues), and lambda_r is computed as the trace of K(n) divided by the trace of K_rr(n) (sum of all eigenvalues divided by sum of the residual-block eigenvalues). These traces can be computed cheaply without needing the full eigendecomposition, and the updates can be applied at every gradient step or at a fixed interval (e.g., every 10 steps)."
+    },
+    {
+      "id": "b3_dist_pinn_dd_002",
+      "question_type": "single_document",
+      "difficulty": "hard",
+      "source_documents": [
+        "dist_pinn_dd"
+      ],
+      "question": "How does the reference anchor normalization strategy combined with decoupled asymmetric weighting resolve pressure indeterminacy?",
+      "ground_truth": "A specific spatial location x_anc is designated the global anchor; local experts covering this location across all time intervals are 'master ranks.' When a master rank broadcasts its pressure field to ghost regions, it subtracts the instantaneous pressure value at the anchor point, pinning the broadcast field to zero at x_anc and eliminating the gauge function there; this normalization applies only to ghost consistency checks, while the PDE residual loss continues to use the raw (unnormalized) output since Navier-Stokes residuals are invariant to additive constants. Asymmetric weighting then makes this unidirectional: for master ranks the spatial ghost pressure loss weight is set to zero, so masters propagate their normalized baseline to spatial neighbors without adjusting their own parameters in response, while the temporal ghost pressure loss weight remains positive for all ranks (including masters) to preserve continuity across consecutive time intervals."
+    },
+    {
+      "id": "b2_xpinn_002",
+      "question_type": "single_document",
+      "difficulty": "medium",
+      "source_documents": [
+        "xpinn"
+      ],
+      "question": "What are the two main interface conditions enforced in the XPINN loss function at subdomain boundaries, and what does each enforce?",
+      "ground_truth": "The two main interface conditions are: (1) the average solution continuity condition (MSE_uavg), which enforces that the solution predicted by neighboring Sub-Nets agrees with the average of both networks' predictions along the interface, giving C^0 continuity; and (2) the residual continuity condition (MSE_R), which enforces that the PDE residual computed from each neighboring Sub-Net matches along the interface, theoretically enforcing solution regularity in the classical sense (i.e., that the solution satisfies its governing PDE across the interface)."
+    },
+    {
+      "id": "b1_pinn_gnn_pue_03",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "pinn_gnn_pue"
+      ],
+      "question": "What MSE did PDPG achieve relative to the Pure GNN baseline, and what does this gap isolate as the contribution of the physics constraints?",
+      "ground_truth": "PDPG achieved an MSE of 0.81e-3 versus 5.82e-3 for Pure GNN (the same GAT-based architecture and training setup but with all physics-informed constraints removed) \u2014 an 86.1% reduction in MSE. Since Pure GNN and PDPG are identical except for the physics-informed energy and thermal constraints, this performance gap directly isolates the contribution of those constraints to prediction accuracy."
+    },
+    {
+      "id": "b1_pinn_gnn_pue_02",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "pinn_gnn_pue"
+      ],
+      "question": "How does the PDPG variant differ architecturally from UEPG in producing the final PUE prediction?",
+      "ground_truth": "Both variants share the same GAT encoder and device-level power prediction module. PDPG (Physically Decomposed PINN-GNN) computes the final PUE using a fixed physical aggregation formula \u2014 total predicted power divided by total predicted IT power. UEPG (Unified End-to-End PINN-GNN) instead replaces this fixed formula with a learnable aggregation module (a lightweight MLP) that maps the predicted power vector directly to the PUE value, learning the aggregation relationship from data rather than imposing it."
+    },
+    {
+      "id": "b1_gns_03",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "gns"
+      ],
+      "question": "Why did the authors add random-walk noise to input velocities during training, and what problem does it mitigate?",
+      "ground_truth": "Because the model is trained on ground-truth one-step data, it never sees inputs corrupted by the accumulated noise that arises during autoregressive rollout (where the model's own noisy predictions become the next input). This distribution mismatch causes the model to make larger errors during rollout, which then compound. Adding random-walk noise (N(0, sigma_v = 0.0003)) to input velocities during training makes the training distribution more similar to the distribution encountered during rollout, making the model more robust to its own accumulated prediction error."
+    },
+    {
+      "id": "b1_gns_01",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "gns"
+      ],
+      "question": "What are the three components of the GNS 'encode-process-decode' architecture, and what does each do?",
+      "ground_truth": "The three components are: (1) the ENCODER, which embeds the particle-based state representation X as a latent graph G0, with node embeddings that are learned functions of particle states and edge embeddings that are learned functions of pairwise particle properties (e.g., relative displacement); (2) the PROCESSOR, which computes interactions among nodes via M steps of learned message-passing using a stack of graph networks (GNs), producing a sequence of updated latent graphs and returning the final graph; and (3) the DECODER, which extracts dynamics information (e.g., accelerations) from the nodes of the final latent graph, which is then used by an Euler integrator update mechanism to predict the next state."
+    },
+    {
+      "id": "b3_pignn_accel_004",
+      "question_type": "single_document",
+      "difficulty": "easy",
+      "source_documents": [
+        "pignn_accel"
+      ],
+      "question": "What were the final training time, VRAM cost, and relative L2 error for the full PIGNN + Multi Processor + Mixed Precision configuration, compared to the baseline PIGNN?",
+      "ground_truth": "The baseline PIGNN took 203 hours to train, used 9GB VRAM, and had a relative L2 error of 4.83. The PIGNN + Multi Processor + Mixed Precision configuration took 57 hours (about one-quarter of the baseline), used 8GB VRAM, and had a relative L2 error of 4.87 \u2014 essentially the same accuracy achieved in roughly a quarter of the training time."
+    },
+    {
+      "id": "b1_xpinn_02",
+      "question_type": "single_document",
+      "difficulty": null,
+      "source_documents": [
+        "xpinn"
+      ],
+      "question": "What computational advantage does XPINN gain from deploying multiple, independently-sized neural networks across subdomains?",
+      "ground_truth": "Because each subdomain uses a separate neural network with independently and optimally selected hyperparameters (depth/width, number and location of residual points, activation function, optimization method, etc.), XPINN can use a deep network in a subdomain with a complex solution and a shallow network in a subdomain with a simple, smooth solution. This large representation and parallelization capacity, combined with the ability to decompose in space and time, allows XPINN to reduce training cost more effectively than a single monolithic PINN."
+    },
+    {
+      "id": "b3_meshgraphnets_002",
+      "question_type": "single_document",
+      "difficulty": "medium",
+      "source_documents": [
+        "meshgraphnets"
+      ],
+      "question": "How does MeshGraphNets perform learned adaptive remeshing at test time without needing the original domain-specific remesher in the loop?",
+      "ground_truth": "The model learns a sizing field \u2014 the only domain-specific part of remeshing \u2014 using the same encode-process-decode architecture, training a decoder output to produce a sizing tensor for each node. At test time, the model predicts both the next simulation state and the sizing field at each step, then hands the sizing field to a generic, domain-independent local remesher (which splits invalid edges and collapses edges where possible) to compute the adapted next-step mesh, avoiding the need to call the original domain-specific remesher used to generate training data."
+    }
+  ]
+}

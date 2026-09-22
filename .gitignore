@@ -1,0 +1,23 @@
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments and credentials
+.env
+venv/
+env/
+.venv/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Large local data / evaluation result dumps
+data/
+eval/eval_results.jsonl
+eval/ragas_scores.jsonl
