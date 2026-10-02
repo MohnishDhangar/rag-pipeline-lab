@@ -207,3 +207,5 @@
 {"strategy": "step_back", "id": "b2_xpinn_005", "question_type": "single_document", "faithfulness": null, "answer_relevancy": null, "context_precision": null, "context_recall": null}
 {"strategy": "step_back", "id": "b2_pignn_al_001", "question_type": "single_document", "faithfulness": null, "answer_relevancy": null, "context_precision": null, "context_recall": null}
 {"strategy": "step_back", "id": "b2_pignn_al_002", "question_type": "single_document", "faithfulness": null, "answer_relevancy": null, "context_precision": null, "context_recall": null}
+{"strategy": "naive", "id": "b1_ntk_pinn_01", "question_type": "single_document", "faithfulness": null, "answer_relevancy": null, "context_precision": null, "context_recall": null}
+{"strategy": "naive", "id": "b1_ntk_pinn_01", "question_type": "single_document", "faithfulness": null, "answer_relevancy": null, "context_precision": null, "context_recall": null}
