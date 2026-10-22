@@ -35,6 +35,7 @@ library is in use — only this file changed when swapping libraries.
 from typing import List, Dict, Optional
 from langchain_core.documents import Document
 from pylate import indexes, models, retrieve
+from langchain_core.runnables import Runnable  # add this import
 
 
 class ColBERTVectorStoreShim:
@@ -80,11 +81,12 @@ class ColBERTVectorStoreShim:
         k = (search_kwargs or {}).get("k", 4)
         return _ShimRetriever(self, k)
 
-
-class _ShimRetriever:
+class _ShimRetriever(Runnable):
     def __init__(self, shim: ColBERTVectorStoreShim, k: int):
         self.shim = shim
         self.k = k
 
-    def invoke(self, query: str) -> List[Document]:
-        return self.shim.similarity_search(query, k=self.k)
+    def invoke(self, input: str, config=None, **kwargs) -> List[Document]:
+        return self.shim.similarity_search(input, k=self.k)
+
+    
