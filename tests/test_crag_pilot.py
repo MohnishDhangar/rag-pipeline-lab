@@ -76,6 +76,7 @@ def test_correction_excludes_rejected_top_k():
         "Which passage contains the evidence?",requested=None,initial=[],
         exclude_keys={(d.metadata["source"],d.metadata["page"],d.page_content)
                       for d in before},widen=True)
-    assert [d.page_content for d in after] == [f"Passage {i}" for i in range(4,8)]
+    assert [d.page_content for d in after] == [f"Passage {i}" for i in range(4,9)]
+    assert len(after)<=8
     assert info["correction_widened"]
     assert info["excluded_previous_passages"]==4

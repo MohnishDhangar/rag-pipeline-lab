@@ -17,7 +17,7 @@ def test_grade_trace_distinguishes_paper_presence_from_accepted_evidence():
     grades=[type("Grade",(),{
         "grade":"ambiguous","quote":"","reason":"Only generic optimizer name"})()]
     trace=strategy._grade_trace(docs,grades)
-    assert CRAG_VERSION=="closed-corpus-crag-v4"
+    assert CRAG_VERSION=="closed-corpus-crag-v5"
     assert trace[0]["paper_id"]=="orig_pinn"
     assert trace[0]["grade"]=="ambiguous"
     assert not trace[0]["quote_verified"]
