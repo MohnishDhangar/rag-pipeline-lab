@@ -13,6 +13,7 @@ from rag_lab.knowledge.paper_registry import PaperRegistry
 from rag_lab.retrieval.provenance import ProvenanceStore
 from rag_lab.retrieval.adaptive_store import AdaptiveRetrievalStore
 from rag_lab.retrieval.query_router import classify_question, VERSION as ROUTER_VERSION
+from rag_lab.routing.controller_v2 import VERSION as CONTROLLER_V2_VERSION
 
 def create_backend(name, root, chroma_path=None, chroma_collection=None):
     if name=="dense":
@@ -34,7 +35,7 @@ def create_backend(name, root, chroma_path=None, chroma_collection=None):
     return ColBERTVectorStoreShim(index_folder=str(root/"data"/"colbert_index"),
                                   id_to_text=mapping, id_to_metadata=metadata)
 
-def make_strategy(name, backend, llm):
+def make_strategy(name, backend, llm, registry=None, *, crag_max_grades=2, crag_pool_k=28):
     from rag_lab.strategies.naive import NaiveStrategy
     from rag_lab.strategies.multi_query import MultiQueryStrategy
     from rag_lab.strategies.rag_fusion import RagFusionStrategy
@@ -42,6 +43,10 @@ def make_strategy(name, backend, llm):
     from rag_lab.strategies.step_back import StepBackStrategy
     from rag_lab.strategies.decomposition import DecompositionStrategy
     from rag_lab.strategies.adaptive import AdaptiveNaiveStrategy
+    from rag_lab.strategies.crag import CRAGStrategy
+    if name == "crag":
+        return CRAGStrategy(backend,llm,registry=registry,
+                            max_grades=crag_max_grades,pool_k=crag_pool_k)
     registry=dict(naive=NaiveStrategy,multi_query=MultiQueryStrategy,
                   rag_fusion=RagFusionStrategy,hyde=HydeStrategy,
                   step_back=StepBackStrategy,decomposition=DecompositionStrategy,
@@ -55,7 +60,13 @@ def usable_generation(row):
 
 def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None,
              verify_on_warning=False, chroma_path=None, chroma_collection=None,
-             adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5, ids=None):
+             adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5, ids=None,
+             crag_max_grades=2, crag_pool_k=28, controller_grader_budget=1,
+             controller_require_colbert=False):
+    if "adaptive_v2" in strategies and (list(backends)!=["dense"] or graph_path):
+        raise ValueError("adaptive_v2 runs once under --backends dense without graph")
+    if crag_max_grades not in (1,2) or controller_grader_budget not in (0,1,2):
+        raise ValueError("CRAG grades must be 1-2; controller budget must be 0-2")
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
     registry = PaperRegistry.from_eval(dataset)
@@ -70,8 +81,14 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                        "lambda_mult": adaptive_lambda, "router_version": ROUTER_VERSION}
     config_key = lambda name, row: (
         json.dumps(row.get("retrieval_config"), sort_keys=True)
-        if name == "adaptive" else None
+        if name in ("adaptive","crag","adaptive_v2") else None
     )
+    crag_config={"version":"closed-corpus-crag-v2",
+                 "max_grades":crag_max_grades,"pool_k":crag_pool_k}
+    controller_config={"version":CONTROLLER_V2_VERSION,
+                       "max_grader_calls":controller_grader_budget,
+                       "crag_pool_k":crag_pool_k,
+                       "require_colbert":controller_require_colbert}
     done = {(r.get("strategy"), r.get("backend"), r.get("id"),
              config_key(r.get("strategy"), r))
             for r in read_jsonl(results) if usable_generation(r)}
@@ -96,10 +113,31 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                     AdaptiveRetrievalStore(raw_store, k=adaptive_k,
                                            fetch_k=adaptive_fetch_k,
                                            lambda_mult=adaptive_lambda), registry)
-            strategy=make_strategy(name,selected,llm)
+            config=(adaptive_config if name=="adaptive"
+                    else crag_config if name=="crag"
+                    else controller_config if name=="adaptive_v2"
+                    else None)
+            if name=="adaptive_v2":
+                from rag_lab.strategies.adaptive_v2 import AdaptiveV2Strategy
+                pools={"dense":store}
+                folder=root/"data"/"colbert_index"
+                if folder.is_dir() and any(folder.iterdir()):
+                    # If index exists but is corrupt, fail loudly instead of
+                    # silently using a different arm of the experiment.
+                    pools["colbert"]=ProvenanceStore(create_backend("colbert",root),registry)
+                elif controller_require_colbert:
+                    raise FileNotFoundError("adaptive_v2 requires ColBERT index in data/colbert_index")
+                strategy=AdaptiveV2Strategy(
+                    pools,llm,registry,max_grader_calls=controller_grader_budget,
+                    crag_pool_k=crag_pool_k)
+                config={**controller_config,"colbert_available":"colbert" in pools}
+            else:
+                strategy=make_strategy(name,selected,llm,registry,
+                                       crag_max_grades=crag_max_grades,
+                                       crag_pool_k=crag_pool_k)
             for q in questions:
                 key=(name,backend_key,q["id"],
-                     json.dumps(adaptive_config, sort_keys=True) if name=="adaptive" else None)
+                     json.dumps(config,sort_keys=True) if config is not None else None)
                 if key in done: continue
                 try:
                     from rag_lab.core.pipeline import EvidenceAwarePipeline
@@ -124,7 +162,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                          "source_documents":q.get("source_documents"),
                          "model":model or llm.model_name,
                          "runtime_question_type":predicted.question_type,
-                         **({"retrieval_config":adaptive_config} if name=="adaptive" else {})}
+                         **({"retrieval_config":config} if config is not None else {})}
                     append_jsonl(results,row)
                     done.add(key)
                     count+=1
@@ -146,6 +184,10 @@ def main():
     p.add_argument("--chroma-collection",help="Collection name (default: langchain)")
     p.add_argument("--graph",type=Path,help="Optional built scientific evidence graph")
     p.add_argument("--verify-on-warning",action="store_true",help="Spend one additional GPT call for uncertain answers")
+    p.add_argument("--crag-max-grades",type=int,choices=[1,2],default=2)
+    p.add_argument("--crag-pool-k",type=int,default=28)
+    p.add_argument("--controller-grader-budget",type=int,choices=[0,1,2],default=1)
+    p.add_argument("--controller-require-colbert",action="store_true")
     p.add_argument("--adaptive-k",type=int,default=4)
     p.add_argument("--adaptive-fetch-k",type=int,default=20)
     p.add_argument("--adaptive-lambda",type=float,default=.5,
@@ -155,6 +197,8 @@ def main():
         p.error("require adaptive_k >= 1, adaptive_fetch_k >= adaptive_k, lambda in [0,1]")
     print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph,
                                 a.verify_on_warning,a.chroma_path,a.chroma_collection,
-                                a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda,a.ids))
+                                a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda,a.ids,
+                                a.crag_max_grades,a.crag_pool_k,
+                                a.controller_grader_budget,a.controller_require_colbert))
 
 if __name__=="__main__": main()
