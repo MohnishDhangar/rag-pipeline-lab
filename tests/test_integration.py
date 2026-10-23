@@ -13,7 +13,7 @@ class FakeTransport:
         self.calls+=1
         if instructions and "JSON matching" in instructions:
             return '{"grade": "correct"}', {"input_tokens":20,"output_tokens":6,"total_tokens":26}
-        return "PINNs encode physics [SOURCE paper.pdf:page2]", {"input_tokens":45,"output_tokens":11,"total_tokens":56}
+        return "PINNs encode physics [SOURCE paper.pdf:pdfpage3]", {"input_tokens":45,"output_tokens":11,"total_tokens":56}
 
 class FakeRetriever:
     def invoke(self,query):

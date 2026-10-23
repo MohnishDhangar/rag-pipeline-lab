@@ -13,7 +13,7 @@ class Doc:
 class DummyStrategy(TraceableStrategy):
     def run(self,q):
         self.last_contexts=[Doc("Evidence about PINNs",id="chunk-1",paper_id="pinn",page=3)]
-        return "A supported finding [SOURCE chunk-1:page3]"
+        return "A supported finding [SOURCE chunk-1:pdfpage4]"
 
 def test_trace_is_from_generation_not_second_retrieval():
     obj=DummyStrategy()
@@ -26,8 +26,8 @@ def test_trace_is_from_generation_not_second_retrieval():
 
 def test_citations():
     d=Doc("Text",id="x",page=9)
-    assert "[SOURCE x:page9]" in format_context(d)
-    assert citation_coverage("Claim [SOURCE x:page9]",[{"id":"x"}])["validity"]==1.0
+    assert "[SOURCE x:pdfpage10]" in format_context(d)
+    assert citation_coverage("Claim [SOURCE x:pdfpage10]",[{"id":"x"}])["validity"]==1.0
     assert citation_coverage("Claim [SOURCE wrong]",[{"id":"x"}])["validity"]==0.0
 
 def test_metrics_and_unknown_labels():
