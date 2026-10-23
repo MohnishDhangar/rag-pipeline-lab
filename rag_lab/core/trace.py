@@ -16,15 +16,28 @@ class RAGResult:
     def to_dict(self): return asdict(self)
 
 def source_record(document):
-    meta = dict(getattr(document,"metadata",{}) or {})
-    text = getattr(document,"page_content","")
+    meta = dict(getattr(document, "metadata", {}) or {})
+    text = getattr(document, "page_content", "")
+    source = meta.get("source")
+    default_id = (str(source).replace("\\", "/").split("/")[-1]
+                  if source else hashlib.sha256(text.encode()).hexdigest()[:16])
+    page_index = meta.get("pdf_page_index", meta.get("page"))
+    page_number = meta.get("pdf_page_number")
+    # PDF loader pages are ZERO-BASED; converted PDF pages are ONE-BASED.
+    if page_number is None and page_index is not None:
+        page_number = int(page_index) + 1
     return {
-        "id": str(meta.get("id") or (str(meta["source"]).split("/")[-1].split("\\")[-1] if meta.get("source") else hashlib.sha256(text.encode()).hexdigest()[:16])),
+        "id": str(meta.get("id") or default_id),
         "paper_id": meta.get("paper_id") or meta.get("short_id"),
-        "source": meta.get("source"),
-        "page": meta.get("page"),
+        "source": source,
+        "page": meta.get("page"),  # legacy zero-based indexing
+        "pdf_page_index": page_index,
+        "pdf_page_number": page_number,
         "score": meta.get("score"),
+        "original_id": meta.get("original_id"),
+        "legacy_id": meta.get("legacy_id"),
     }
+
 
 class TraceableStrategy:
     """Strategies set self.last_contexts during run, never in a second retrieval."""

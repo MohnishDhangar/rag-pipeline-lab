@@ -9,6 +9,8 @@ from pathlib import Path
 from rag_lab.llms.gpt_adapter import build_chat_model, InferenceError
 from rag_lab.utils import append_jsonl
 from rag_lab.evaluation.benchmark import read_jsonl
+from rag_lab.knowledge.paper_registry import PaperRegistry
+from rag_lab.retrieval.provenance import ProvenanceStore
 
 def create_backend(name, root, chroma_path=None, chroma_collection=None):
     if name=="dense":
@@ -51,9 +53,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
              verify_on_warning=False, chroma_path=None, chroma_collection=None):
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
-    from pathlib import Path as _Path
-    file_ids={_Path(p["file"]).name.lower():p["short_id"]
-              for p in dataset["metadata"]["papers"] if p.get("file")}
+    registry = PaperRegistry.from_eval(dataset)
     if limit is not None: questions=questions[:limit]
     done={(r.get("strategy"),r.get("backend"),r.get("id"))
           for r in read_jsonl(results) if usable_generation(r)}
@@ -65,6 +65,8 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
             from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
             from rag_lab.knowledge.evidence_graph import EvidenceGraph
             store=EvidenceAugmentedVectorStore(store,EvidenceGraph.load(graph_path))
+        # Annotate by source filenames only, NEVER gold labels from the question.
+        store=ProvenanceStore(store,registry)
         backend_key=backend_name+"+graph" if graph_path else backend_name
         for name in strategies:
             strategy=make_strategy(name,store,llm)
@@ -80,11 +82,11 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                         print(f"Stopping: {backend_key}/{name}/{q['id']} retrieved no evidence. "
                               "No successful result will be recorded.")
                         return count
-                    # Enrich source provenance using corpus file names, never question labels.
-                    for source in result.sources:
-                        if not source.get("paper_id") and source.get("source"):
-                            source_name=_Path(str(source["source"])).name.lower()
-                            source["paper_id"]=file_ids.get(source_name)
+                    # Every strategy now sees canonical passage metadata before GPT.
+                    unresolved=sum(not src.get("paper_id") for src in result.sources)
+                    if unresolved:
+                        print(f"WARNING: {unresolved} source chunks have unresolved paper IDs "
+                              f"for {q['id']}; strict retrieval scores will be unscored.")
                     row={**result.to_dict(), "id":q["id"],
                          "strategy":name,"backend":backend_key,
                          "question_type":q.get("question_type"),

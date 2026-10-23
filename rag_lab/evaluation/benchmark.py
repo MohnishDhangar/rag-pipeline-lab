@@ -7,6 +7,7 @@ import argparse, json
 from pathlib import Path
 
 from rag_lab.evaluation.metrics import score_retrieval
+from rag_lab.knowledge.paper_registry import PaperRegistry
 from rag_lab.evaluation.judge import evaluate_row, RUBRIC_VERSION
 from rag_lab.utils import append_jsonl
 from rag_lab.llms.gpt_adapter import InferenceError
@@ -20,7 +21,7 @@ def read_jsonl(path):
             except json.JSONDecodeError: continue
     return rows
 
-def benchmark(input_path, output_path, mode):
+def benchmark(input_path, output_path, mode, registry=None):
     completed = {
         (r.get("strategy"),r.get("backend"),r.get("id"),r.get("judge_version") if mode=="judge" else None)
         for r in read_jsonl(output_path)
@@ -33,7 +34,13 @@ def benchmark(input_path, output_path, mode):
         if key in completed: continue
         if mode=="retrieval":
             sources=row.get("sources") or []
-            paper_ids=[d.get("paper_id") for d in sources if isinstance(d,dict)]
+            paper_ids=[]
+            for doc in sources:
+                if not isinstance(doc,dict):
+                    paper_ids.append(None)
+                else:
+                    paper_ids.append(doc.get("paper_id") or
+                                     (registry.resolve(doc.get("source")) if registry else None))
             scores=score_retrieval(paper_ids,row.get("source_documents"),k=4)
         else:
             try: scores=evaluate_row(row)
@@ -51,9 +58,11 @@ def main():
     parser.add_argument("mode",choices=["retrieval","judge"])
     parser.add_argument("--input",default="eval/generated_gpt.jsonl")
     parser.add_argument("--output")
+    parser.add_argument("--eval",default="eval/eval_set.json",help="Ground-truth registry (no retrieval leakage)")
     args=parser.parse_args()
     output=args.output or ("eval/retrieval_metrics.jsonl" if args.mode=="retrieval"
                            else "eval/gpt_judge_scores.jsonl")
-    print("New rows:",benchmark(args.input,output,args.mode))
+    registry=PaperRegistry.from_eval(json.loads(Path(args.eval).read_text()))
+    print("New rows:",benchmark(args.input,output,args.mode,registry))
 
 if __name__=="__main__": main()
