@@ -159,22 +159,26 @@ class CRAGStrategy(TraceableStrategy):
         if needs_correction and self.max_grades>=2:
             trace["corrective_retrieval"]=True
             # Retrieve wider candidates, but stay inside the trusted corpus.
+            missing_accepted_papers=requested-covered
             wider,correction_info=self.source_retriever.retrieve(
                 question,requested=request,initial=[],
-                exclude_keys={document_key(d) for d in docs},widen=True)
+                exclude_keys={document_key(d) for d in docs},widen=True,
+                force_target_papers=missing_accepted_papers)
             trace["correction_retrieval"]=correction_info
-            candidates=list(accepted)
-            seen={document_key(d) for d in candidates}
+            seen={document_key(d) for d in accepted}
+            new_candidates=[]
             for d in wider:
                 if document_key(d) not in seen:
-                    candidates.append(d);seen.add(document_key(d))
-            if len(candidates)>self.pool_k:
-                candidates=candidates[:self.pool_k]
-            if candidates and (not docs or {document_key(d) for d in candidates}!={document_key(d) for d in docs}):
-                grades=self._grade(question,candidates)
+                    new_candidates.append(d)
+                    seen.add(document_key(d))
+            new_candidates=new_candidates[:self.pool_k]
+            if new_candidates:
+                # Reuse previously validated exact evidence, rather than
+                # paying the grader to reconsider passages it already accepted.
+                grades=self._grade(question,new_candidates)
                 trace["grader_calls"]+=int(self.grader_fn is None)
-                trace["corrective_grades"]=self._grade_trace(candidates,grades)
-                accepted=self._accepted(candidates,grades)
+                trace["corrective_grades"]=self._grade_trace(new_candidates,grades)
+                accepted.extend(self._accepted(new_candidates,grades))
                 covered={self.registry.resolve(d.metadata.get("source")) for d in accepted}
         if not accepted or not requested.issubset(covered):
             trace.update(action="abstain",reason="Graded evidence lacks required source support",

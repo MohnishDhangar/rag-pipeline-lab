@@ -109,7 +109,7 @@ class SourceAwareRetriever:
         return docs
 
     def retrieve(self, question, *, requested=None, initial=None,
-                 exclude_keys=None, widen=False):
+                 exclude_keys=None, widen=False, force_target_papers=None):
         request=requested or requested_sources(question,self.registry)
         excluded=set(exclude_keys or ())
         if initial is None:
@@ -124,27 +124,45 @@ class SourceAwareRetriever:
                 candidates=self._search(question,self.pool_k)
         candidates=[d for d in candidates if document_key(d) not in excluded]
         target_ids=list(request.paper_ids)
+        forced=set(force_target_papers or ())
+        if not forced.issubset(set(target_ids)):
+            raise ValueError("Cannot force retrieval of a paper not named by the question")
         quota=max(1,self.k//max(1,len(target_ids)))
+        targeted={}
         # Only explicitly identified papers receive targeted searches.
         retries=0
         for paper in target_ids:
             current=sum(self.registry.resolve(d.metadata.get("source"))==paper for d in candidates)
-            if current>=quota: continue
+            if current>=quota and paper not in forced: continue
             if retries>=self.max_target_queries:break
             retries+=1
             query=question  # Filtered to this source; do not pollute it with internal paper-ID tokens.
             docs=self._search(query,self.pool_k,paper=paper)
             docs=[d for d in docs if document_key(d) not in excluded]
-            candidates.extend(docs[:max(quota-current,1)])
+            if paper in forced:
+                # Prefer fresh within-paper matches when earlier retrieval
+                # found that paper but FAILED the evidence grader.
+                targeted[paper]=docs[:max(2,quota)]
+            else:
+                candidates.extend(docs[:max(quota-current,1)])
         # Preserve at least one passage per explicit source if available;
         # fill remaining slots from initial rank order.
         chosen=[]
         used=set()
         for paper in target_ids:
-            for d in candidates:
+            # Force-targeted papers are searched before the ungraded global
+            # pool; otherwise the latter may crowd out better candidates.
+            pool=targeted.get(paper,[])+candidates
+            for d in pool:
                 key=document_key(d)
                 if key not in used and self.registry.resolve(d.metadata.get("source"))==paper:
                     chosen.append(d);used.add(key);break
+        for paper in target_ids:
+            if paper not in targeted: continue
+            for d in targeted[paper]:
+                key=document_key(d)
+                if key not in used and len(chosen)<self.k:
+                    chosen.append(d);used.add(key)
         for d in candidates:
             key=document_key(d)
             if key not in used and len(chosen)<self.k:
@@ -159,4 +177,7 @@ class SourceAwareRetriever:
             "targeted_retrieval_queries":retries,
             "correction_widened":bool(widen),
             "excluded_previous_passages":len(excluded),
+            "forced_paper_retries":sorted(forced),
+            "targeted_results_by_paper":{paper:len(docs)
+                                         for paper,docs in targeted.items()},
         }
