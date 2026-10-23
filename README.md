@@ -1,0 +1,167 @@
+# RAG Pipeline Lab
+
+Experimental scientific RAG platform for physics-informed neural networks,
+graph neural networks, PDE solvers, and scientific simulation research papers.
+
+The goal is **evidence-grounded answers with an evaluated cost-aware retrieval
+router**, not another generic document chatbot. The 63-question historical
+benchmark is a starting point, **not evidence of a measured performance win**.
+
+## Architecture
+
+- **Embeddings:** Gemini embedding-001 (requires GOOGLE_API_KEY).
+- **GPT generation and judging:** official Sign in with ChatGPT open-source
+  OAuth and supported streaming Responses API requests. No Groq or local LLM.
+- **Retrieval:** Chroma dense, optional PyLate/ColBERT, optional local scientific
+  evidence graph blended with Reciprocal Rank Fusion.
+- **RAG strategies:** naive, multi-query, RAG Fusion, HyDE, decomposition,
+  step-back, RAPTOR indexing and corrective RAG.
+- **Adaptive router:** an inexpensive, locally trained scikit-learn classifier
+  selecting among existing strategies, with safe naive fallback.
+- **Evaluation:** exact retrieved-context traces, source provenance, deterministic
+  paper-level retrieval metrics, resumable custom GPT judging, optional RAGAS.
+- **Demo:** Streamlit dashboard with source inspection and experiment comparison.
+
+## Install and authorize GPT
+
+Python 3.10 or later. In a terminal on your own computer:
+
+~~~bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[rag,dev,dashboard]"
+python -m pytest -q
+python -m rag_lab.llms.cli login
+python -m rag_lab.llms.cli models
+~~~
+
+On Windows activate the environment using .venv\Scripts\activate.
+
+First sign-in registers the local open-source client in your browser.
+You must approve ChatGPT plan usage. The callback binds to 127.0.0.1,
+uses PKCE + state + nonce, validates the OpenID Connect ID token, and
+stores protected access/refresh tokens outside the Git repository.
+Use the --new-account login option if you want to authorize another account.
+Model choices are specific to your authorized ChatGPT account.
+
+Select a listed model slug and supply only the Gemini embedding credential:
+
+~~~bash
+export RAG_GPT_MODEL="model-slug-from-the-models-command"
+export GOOGLE_API_KEY="your-google-embedding-credential"
+python -m rag_lab.llms.cli test
+~~~
+
+On PowerShell set environment variables with $env:RAG_GPT_MODEL and
+$env:GOOGLE_API_KEY instead.
+
+Subscription usage is **not unlimited**. ChatGPT Plus plan usage is shared
+across participating apps. This uses official OAuth, not scraped browser
+cookies, unofficial ChatGPT routes, or a paid OpenAI API key. If permission
+is refused, model access is unavailable, or a usage limit is reached,
+the pipeline stops rather than bypassing restrictions.
+
+Official specifications:
+- https://developers.openai.com/siwc/token-sharing-open-source/sign-in
+- https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference
+- https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations
+
+## Prepare the corpus and local indexes
+
+The PDFs and indexes are intentionally not included in Git. Place authorized
+PDF copies in data/papers, then use notebooks/01_foundation.ipynb to build
+data/chroma_naive_gemini. For ColBERT use notebooks/08_colbert.ipynb; it
+produces data/colbert_index and data/id_to_text.json after configuring its
+environment-specific paths. The original notebooks contain some stale paths.
+
+Build the optional source-linked evidence graph offline, without GPT calls:
+
+~~~bash
+python -m rag_lab.knowledge.build_graph --papers data/papers \
+  --eval eval/eval_set.json --output data/evidence_graph.json
+~~~
+
+This initial graph links document passages with recognized research concepts
+and source metadata. It is **not** an independently fact-checked causal
+knowledge graph and PDF text extraction may lose mathematical layout.
+
+## Generation
+
+~~~bash
+# Small GPT smoke test: three queries, one strategy
+python -m rag_lab.evaluation.generate --strategies naive --backends dense --limit 3
+
+# Resumable six-strategy benchmark, provided both indexes exist
+python -m rag_lab.evaluation.generate --strategies naive multi_query \
+  rag_fusion hyde step_back decomposition --backends dense colbert
+
+# Optional scientific evidence graph retrieval
+python -m rag_lab.evaluation.generate --strategies naive --backends dense \
+  --graph data/evidence_graph.json
+~~~
+
+Saved to eval/generated_gpt.jsonl with the actual generating contexts,
+document identities, source-page metadata, latency and inference call trace.
+Previously completed strategy/backend/question combinations are skipped.
+Errors never count as successful answers.
+
+To enable an optional on-disk GPT response cache:
+set RAG_GPT_CACHE to data/gpt_responses.sqlite. It caches only text and usage,
+not bearer tokens. Keep the file local and protected if the corpus is sensitive.
+
+## Offline evaluation and adaptive routing
+
+~~~bash
+# Deterministic paper-level precision@k, recall@k, MRR and nDCG
+python -m rag_lab.evaluation.benchmark retrieval --input eval/generated_gpt.jsonl
+
+# Checkpointed GPT judge; one combined rubric call per answer
+python -m rag_lab.evaluation.benchmark judge --input eval/generated_gpt.jsonl
+
+# Train a locally executed, non-LLM query router from completed scored rows
+python -m rag_lab.routing.train_router \
+  --generations eval/generated_gpt.jsonl \
+  --scores eval/gpt_judge_scores.jsonl \
+  --output data/adaptive_router.joblib
+~~~
+
+The custom GPT judge measures faithfulness, answer correctness, answer
+relevance and citation support with a versioned prompt. **These are not
+official RAGAS metrics.** The optional RAGAS adapter is in
+rag_lab/evaluation/ragas_support.py; validate compatibility on a small subset
+before running a large benchmark.
+
+The router trainer requires 25 or more distinct questions with two or more
+scored strategies and a meaningful class distribution. It holds out 25 percent
+of question IDs and reports holdout strategy classification accuracy. With
+insufficient data, routing defaults safely to naive. Only load joblib files
+you generated yourself; untrusted pickles are unsafe.
+
+Before reporting CV performance claims, add paper-disjoint testing,
+manually verified evidence labels, cross-model judge comparisons and quality/
+latency/call-count ablations. Your current historical evaluation data is
+insufficient for a defensible claim of model superiority.
+
+## Dashboard
+
+~~~bash
+streamlit run dashboard/app.py
+~~~
+
+Explore questions and retrieved source evidence, run selected strategies,
+visualize saved quality metrics, and inspect the offline graph. It runs
+locally against your own OAuth credentials and is **not meant to be publicly
+hosted using your personal tokens**.
+
+## Limitations
+
+- GPT OAuth must be authorized interactively by the user on their own machine.
+  CI uses mocks and never spends the user's ChatGPT plan allowance.
+- Existing notebooks include experimental paths and incomplete RAPTOR scoring.
+- The paper corpus, Chroma store and PyLate index must be built separately.
+- Citation ID validity is deterministic; semantic faithfulness requires judged
+  or human-verified evaluation.
+- GPT-generated answers judged by GPT have possible model-family bias.
+- RAGAS releases may need minor version-specific integration adjustments.
+- The evidence association graph uses deterministic term extraction, not
+  validated theorem or causal relationship extraction.
