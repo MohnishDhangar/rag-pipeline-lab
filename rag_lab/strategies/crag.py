@@ -160,10 +160,30 @@ class CRAGStrategy(TraceableStrategy):
             trace.update(action="abstain",reason="Graded evidence lacks required source support",
                          covered_sources=sorted(x for x in covered if x))
             return ABSTAIN
-        self.last_contexts=accepted[:self.k]
+        # A simple [:k] could silently drop a requested paper from the
+        # context despite it having passed grading. Allocate one accepted
+        # passage to each requested paper, then fill the remaining slots.
+        ordered=[]
+        seen=set()
+        for paper in request.paper_ids:
+            for d in accepted:
+                key=document_key(d)
+                if key not in seen and self.registry.resolve(d.metadata.get("source"))==paper:
+                    ordered.append(d);seen.add(key);break
+        for d in accepted:
+            key=document_key(d)
+            if key not in seen and len(ordered)<self.k:
+                ordered.append(d);seen.add(key)
+        self.last_contexts=ordered[:self.k]
+        final_sources={self.registry.resolve(d.metadata.get("source"))
+                       for d in self.last_contexts}
+        if not requested.issubset(final_sources):
+            self.last_contexts=[]
+            trace.update(action="abstain",reason="Final context budget cannot cover required papers")
+            return ABSTAIN
         trace.update(action="corrected" if trace["corrective_retrieval"] else "correct",
                      selected_passages=len(self.last_contexts),
-                     covered_sources=sorted(x for x in covered if x))
+                     covered_sources=sorted(x for x in final_sources if x))
         # Final evidence must contain only graded, verbatim-traceable passages.
         context="\n\n".join(format_context(d) for d in self.last_contexts)
         return (ANSWER_PROMPT | self.llm | StrOutputParser()).invoke(
