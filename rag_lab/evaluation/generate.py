@@ -55,10 +55,16 @@ def usable_generation(row):
 
 def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None,
              verify_on_warning=False, chroma_path=None, chroma_collection=None,
-             adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5):
+             adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5, ids=None):
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
     registry = PaperRegistry.from_eval(dataset)
+    if ids is not None:
+        requested=set(ids)
+        unknown=requested-{q["id"] for q in questions}
+        if unknown:
+            raise ValueError(f"Unknown evaluation IDs: {sorted(unknown)}")
+        questions=[q for q in questions if q["id"] in requested]
     if limit is not None: questions=questions[:limit]
     adaptive_config = {"k": adaptive_k, "fetch_k": adaptive_fetch_k,
                        "lambda_mult": adaptive_lambda, "router_version": ROUTER_VERSION}
@@ -135,6 +141,7 @@ def main():
     p.add_argument("--strategies",nargs="+",default=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"])
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
     p.add_argument("--limit",type=int)
+    p.add_argument("--ids",nargs="+",help="Select specific evaluation IDs for matched paired generation")
     p.add_argument("--chroma-path",type=Path,help="Existing, nonempty Chroma index")
     p.add_argument("--chroma-collection",help="Collection name (default: langchain)")
     p.add_argument("--graph",type=Path,help="Optional built scientific evidence graph")
@@ -148,6 +155,6 @@ def main():
         p.error("require adaptive_k >= 1, adaptive_fetch_k >= adaptive_k, lambda in [0,1]")
     print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph,
                                 a.verify_on_warning,a.chroma_path,a.chroma_collection,
-                                a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda))
+                                a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda,a.ids))
 
 if __name__=="__main__": main()
