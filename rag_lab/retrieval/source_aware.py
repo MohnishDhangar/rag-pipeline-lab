@@ -104,6 +104,8 @@ class SourceAwareRetriever:
     def retrieve(self, question, *, requested=None, initial=None):
         request=requested or requested_sources(question,self.registry)
         candidates=list(initial) if initial is not None else self._search(question,self.k)
+        if initial is not None and not candidates and not request.paper_ids:
+            candidates=self._search(question,self.pool_k)
         by_paper={self.registry.resolve(d.metadata.get("source")) for d in candidates}
         target_ids=list(request.paper_ids)
         quota=max(1,self.k//max(1,len(target_ids)))
