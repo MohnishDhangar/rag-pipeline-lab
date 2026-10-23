@@ -37,6 +37,13 @@ class ColBERTVectorStoreShim:
         self.id_to_text=id_to_text
         self.id_to_metadata=id_to_metadata or {}
         validate_mappings(id_to_text,self.id_to_metadata,require_metadata=require_metadata)
+        # A verified index must have been encoded by the *same* model used
+        # for query vectors. The manifest protects against accidental mismatch.
+        from rag_lab.retrieval.colbert_manifest import validate_manifest
+        manifest=validate_manifest(self.index_folder.parent.parent,
+                                   id_to_text,self.id_to_metadata)
+        if manifest["status"]=="matched" and manifest["model"]!=model_name:
+            raise ValueError("ColBERT query model differs from indexed embedding model")
         if model is None or index is None or retriever is None:
             if not self.index_folder.is_dir() or not any(self.index_folder.iterdir()):
                 raise FileNotFoundError(f"Missing ColBERT index: {self.index_folder}")
