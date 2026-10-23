@@ -115,3 +115,39 @@ fallback, but do not compare that result as if ColBERT was used.
   do not qualify as a held-out validation set.
 - No generated-answer quality advantage is claimed without the local
   four-arm benchmark and a separate held-out assessment.
+
+
+## Repair an existing ColBERT index missing id_to_metadata.json
+
+If `colbert_health` fails on missing `data/id_to_metadata.json`, do not
+immediately rebuild PLAID. The exporter previously constructed
+`GoogleGenerativeAIEmbeddings` just to read local Chroma passages, which
+unnecessarily required `GOOGLE_API_KEY`. The repaired exporter reads local
+Chroma via `chromadb.PersistentClient` and makes **no API requests**:
+
+~~~fish
+cd ~/Codes/rag-lab
+set PY "$HOME/my-jupyter-env/bin/python"
+
+# This preserves any existing data/colbert_index and data/id_to_text.json.
+"$PY" -m rag_lab.retrieval.export_colbert_leaves --root .
+
+# Check the ID/text/metadata counts and source aliases.
+"$PY" -m rag_lab.retrieval.colbert_health --root . --expected-chunks 576
+
+# Exercise the actual PyLate retrieval model, not just the mapping.
+"$PY" -m rag_lab.retrieval.colbert_health --root . --expected-chunks 576 \
+  --query "How does XPINN enforce interface constraints?"
+~~~
+
+The exporter aligns old ColBERT chunk IDs to Chroma via EXACT stored text,
+not an assumed positional order. If duplicate text appears in multiple PDFs
+or pages with conflicting metadata, it stops: text-only mappings cannot
+determine which PDF/page the historical PLAID index originally used.
+Likewise, a corpus mismatch or stale `leaf_texts.json` stops rather than
+overwriting existing index files. Restore older mappings or deliberately
+build a new, separately backed-up index in that situation. The metadata
+export does not generate a manifest for a pre-existing index, because it
+cannot prove which embeddings PLAID stored. A missing manifest thus reports
+`unverified_no_manifest`, not `matched`; only the current builder writes a
+manifest after successfully indexing.
