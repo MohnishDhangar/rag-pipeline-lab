@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse,json
 from pathlib import Path
 from rag_lab.retrieval.colbert_backend import validate_mappings
+from rag_lab.retrieval.colbert_manifest import write_manifest
 
 
 def build(root, *, batch_size=4, overwrite=False, model_name="lightonai/colbertv2.0"):
@@ -32,6 +33,7 @@ def build(root, *, batch_size=4, overwrite=False, model_name="lightonai/colbertv
     index.add_documents(documents_ids=docids,documents_embeddings=embeddings)
     target=data/"id_to_text.json"
     target.write_text(json.dumps(texts,ensure_ascii=False),encoding="utf-8")
+    write_manifest(root,texts,metadata,model_name=model_name)
     return len(docs)
 
 

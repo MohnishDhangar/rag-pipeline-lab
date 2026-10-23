@@ -11,9 +11,10 @@ import argparse,json
 from pathlib import Path
 from rag_lab.retrieval.colbert_backend import validate_mappings
 from rag_lab.knowledge.paper_registry import PaperRegistry
+from rag_lab.retrieval.colbert_manifest import validate_manifest
 
 
-def check(root, *, query=None, k=4, expected_chunks=None):
+def check(root, *, query=None, k=4, expected_chunks=None, strict_manifest=False):
     root=Path(root)
     data=root/"data"
     with (data/"id_to_text.json").open(encoding="utf8") as f:
@@ -37,7 +38,8 @@ def check(root, *, query=None, k=4, expected_chunks=None):
         raise FileNotFoundError(f"No PLAID index directory or files at {folder}")
     if unresolved:
         raise ValueError(f"{len(unresolved)} ColBERT chunks have unknown paper provenance: {unresolved[:3]}")
-    result={"mapping_chunks":len(texts),"papers":source_counts,"index_path":str(folder)}
+    result={"mapping_chunks":len(texts),"papers":source_counts,"index_path":str(folder),
+            "manifest":validate_manifest(root,texts,metadata,strict=strict_manifest)}
     if query is not None:
         from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
         store=ColBERTVectorStoreShim(str(folder),texts,metadata)
@@ -56,8 +58,10 @@ def main():
     p.add_argument("--query")
     p.add_argument("--k",type=int,default=4)
     p.add_argument("--expected-chunks",type=int,default=576)
+    p.add_argument("--strict-manifest",action="store_true")
     a=p.parse_args()
     print(json.dumps(check(a.root,query=a.query,k=a.k,
-                           expected_chunks=a.expected_chunks),indent=2))
+                           expected_chunks=a.expected_chunks,
+                           strict_manifest=a.strict_manifest),indent=2))
 
 if __name__=="__main__":main()
