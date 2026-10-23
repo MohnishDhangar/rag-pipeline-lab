@@ -11,9 +11,15 @@ class InferenceError(RuntimeError):
 
 def parse_object(text):
     value = text.strip()
-    if value.startswith("'''") and value.endswith("'''"):
-        value = value[3:-3].strip()
-    value = json.loads(value)
+    if value.startswith("~~~"):
+        value = value.strip("~").strip()
+    # JSON objects may be wrapped in a Markdown code fence. Never execute output.
+    if not value.startswith("{"):
+        pos=value.find("{")
+        if pos == -1:
+            raise ValueError("No JSON object in GPT response")
+        value=value[pos:]
+    value, _ = json.JSONDecoder().raw_decode(value)
     if not isinstance(value, dict):
         raise ValueError("Expected JSON object")
     return value

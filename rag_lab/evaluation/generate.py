@@ -19,8 +19,10 @@ def create_backend(name, root):
                       persist_directory=str(root/"data"/"chroma_naive_gemini"))
     from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
     with (root/"data"/"id_to_text.json").open() as f: mapping=json.load(f)
+    metadata_path=root/"data"/"id_to_metadata.json"
+    metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
     return ColBERTVectorStoreShim(index_folder=str(root/"data"/"colbert_index"),
-                                  id_to_text=mapping)
+                                  id_to_text=mapping, id_to_metadata=metadata)
 
 def make_strategy(name, backend, llm):
     from rag_lab.strategies.naive import NaiveStrategy

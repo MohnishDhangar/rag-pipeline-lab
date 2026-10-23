@@ -43,6 +43,7 @@ class ColBERTVectorStoreShim:
         self,
         index_folder: str,
         id_to_text: Dict[str, str],
+        id_to_metadata: Optional[Dict[str, dict]] = None,
         #model_name: str = "colbert-ir/colbertv2.0",
         model_name: str = "lightonai/colbertv2.0",
     ):
@@ -56,6 +57,7 @@ class ColBERTVectorStoreShim:
         self.index = indexes.PLAID(index_folder=index_folder, override=False)
         self.retriever = retrieve.ColBERT(index=self.index)
         self.id_to_text = id_to_text
+        self.id_to_metadata = id_to_metadata or {}
 
     def _embed_query(self, query: str):
         return self.model.encode([query], is_query=True, show_progress_bar=False)
@@ -68,7 +70,7 @@ class ColBERTVectorStoreShim:
             text = self.id_to_text.get(doc_id)
             if text is None:
                 text = f"[WARNING: no text found for id={doc_id!r} — check id_to_text mapping]"
-            docs.append(Document(page_content=text, metadata={"score": score, "id": doc_id}))
+            docs.append(Document(page_content=text, metadata={**self.id_to_metadata.get(doc_id, {}), "score":score, "id":doc_id}))
         return docs
 
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:

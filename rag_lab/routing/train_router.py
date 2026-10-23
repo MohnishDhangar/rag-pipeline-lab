@@ -14,11 +14,12 @@ from rag_lab.evaluation.benchmark import read_jsonl
 DEFAULT_CALLS={"naive":1,"multi_query":2,"rag_fusion":2,"hyde":2,
                "step_back":2,"decomposition":5,"crag":8}
 
-def prepare_rows(generations, scores, *, lambda_calls=0.025, quality_key="answer_correctness"):
+def prepare_rows(generations, scores, *, lambda_calls=0.025, quality_key="answer_correctness", backend="dense"):
     score_map={(r.get("strategy"),r.get("backend"),r.get("id")):r
                for r in scores if isinstance(r.get(quality_key),(int,float))}
     grouped=defaultdict(list)
     for row in generations:
+        if row.get("backend") != backend: continue
         score=score_map.get((row.get("strategy"),row.get("backend"),row.get("id")))
         if not score or not row.get("answer"): continue
         name=row["strategy"]
@@ -32,11 +33,11 @@ def prepare_rows(generations, scores, *, lambda_calls=0.025, quality_key="answer
         labeled.append((q_id,best[2],best[1],best[0]))
     return labeled
 
-def train(generations,scores,output,seed=42):
+def train(generations,scores,output,seed=42,backend="dense"):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
     import joblib
-    examples=prepare_rows(generations,scores)
+    examples=prepare_rows(generations,scores,backend=backend)
     if len(examples)<25:
         raise ValueError("Need at least 25 distinct questions with two or more scored strategies")
     questions=[q for _,q,_,_ in examples]
@@ -65,8 +66,9 @@ def main():
     p.add_argument("--generations",default="eval/generated_gpt.jsonl")
     p.add_argument("--scores",default="eval/gpt_judge_scores.jsonl")
     p.add_argument("--output",default="data/adaptive_router.joblib")
+    p.add_argument("--backend",default="dense")
     args=p.parse_args()
-    report=train(read_jsonl(args.generations),read_jsonl(args.scores),args.output)
+    report=train(read_jsonl(args.generations),read_jsonl(args.scores),args.output,backend=args.backend)
     print(json.dumps(report,indent=2))
 
 if __name__=="__main__":main()

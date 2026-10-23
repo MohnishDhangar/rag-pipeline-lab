@@ -40,7 +40,18 @@ class AdaptiveRouter:
 
     def run_with_trace(self, question):
         chosen=self.choose(question)
-        result=self.strategies[chosen].run_with_trace(question)
+        strategy=self.strategies[chosen]
+        result=strategy.run_with_trace(question)
+        # Legacy CRAG.run_with_trace returns a dict; keep its notebook contract.
+        if isinstance(result,dict):
+            from rag_lab.core.trace import RAGResult, source_record
+            docs=getattr(strategy,"last_contexts",[])
+            result=RAGResult(
+                question=question, answer=result["answer"], strategy=chosen,
+                contexts=[d.page_content for d in docs],
+                sources=[source_record(d) for d in docs], latency_ms=0.0,
+                trace={"crag_path":result.get("path"),
+                       "crag_grades":result.get("grades",[])})
         result.trace["selected_route"]=chosen
         result.trace["router"]="learned" if self.estimator else "conservative-fallback"
         return result
