@@ -279,3 +279,30 @@ The judge uses a separate custom GPT rubric; it does not produce RAGAS
 metrics unless the separate RAGAS adapter is used. Versioned evaluation
 scores should not be compared across prompts or paper registries without
 carefully aligning labels and the retrieval corpus.
+
+
+### Retest after correcting an audited paper filename alias (no API calls)
+
+Do **not** rerun the old retrieval_compare command against the same output:
+its resume logic will skip already-completed runs, preserving stale null scores.
+The audited XPINN filename is now registered under `xpinn` in
+`rag_lab/knowledge/paper_registry.py`. Re-evaluate saved rankings offline:
+
+~~~bash
+python -m rag_lab.evaluation.rescore_retrieval \
+  --input eval/retrieval_ablation_v2.jsonl \
+  --output eval/retrieval_ablation_v2_rescored.jsonl
+~~~
+
+This reads only `eval/eval_set.json` and the previous ablation JSONL. It makes
+**no Gemini embedding, GPT generation or GPT judging requests**. The CLI prints
+recovered/missing provenance counts and per-method means. It refuses to overwrite
+existing outputs and raises on conflicting paper IDs or duplicate runs.
+
+Re-running retrieval itself is a *different* experiment and requires Gemini
+embeddings: use `--output eval/retrieval_ablation_fresh.jsonl` instead of
+appending to the earlier checkpoint. Stored passage IDs that start with
+`unknown:` cannot be accurately regenerated from the retrieval-only JSONL,
+because that file doesn't include chunk text; offline rescoring leaves these
+IDs in place and marks `passage_id_needs_regeneration`. Future freshly retrieved
+passages will receive corrected `xpinn:<digest>` IDs automatically.
