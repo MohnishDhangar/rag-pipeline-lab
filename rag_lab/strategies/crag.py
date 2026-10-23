@@ -20,7 +20,7 @@ from rag_lab.retrieval.source_aware import (
 )
 
 ABSTAIN = "Insufficient retrieved evidence to answer this question."
-CRAG_VERSION = "closed-corpus-crag-v3"
+CRAG_VERSION = "closed-corpus-crag-v4"
 
 
 class PassageAssessment(BaseModel):
@@ -105,6 +105,21 @@ class CRAGStrategy(TraceableStrategy):
         # Reject fabricated evidence quotations; no substring, no acceptance.
         return sorted(entries,key=lambda x:x.index)
 
+    def _grade_trace(self, docs, grades):
+        """Persist concise grade diagnoses, never model reasoning or new text.
+
+        Grade labels and a verbatim-quote validity bit explain whether a
+        paper is merely retrieved or provides actual accepted evidence.
+        """
+        return [{
+            "paper_id":self.registry.resolve(d.metadata.get("source")),
+            "source":d.metadata.get("source"),
+            "pdf_page_index":d.metadata.get("page"),
+            "grade":g.grade,
+            "quote_verified":bool(g.quote.strip() and g.quote.strip() in d.page_content),
+            "reason":g.reason[:200],
+        } for d,g in zip(docs,grades)]
+
     @staticmethod
     def _accepted(docs,grades):
         accepted=[]
@@ -134,6 +149,7 @@ class CRAGStrategy(TraceableStrategy):
             return ABSTAIN
         grades=self._grade(question,docs)
         trace["grader_calls"]+=int(bool(docs) and self.grader_fn is None)
+        trace["initial_grades"]=self._grade_trace(docs,grades)
         accepted=self._accepted(docs,grades)
         requested=set(request.paper_ids)
         covered={self.registry.resolve(d.metadata.get("source")) for d in accepted}
@@ -157,6 +173,7 @@ class CRAGStrategy(TraceableStrategy):
             if candidates and (not docs or {document_key(d) for d in candidates}!={document_key(d) for d in docs}):
                 grades=self._grade(question,candidates)
                 trace["grader_calls"]+=int(self.grader_fn is None)
+                trace["corrective_grades"]=self._grade_trace(candidates,grades)
                 accepted=self._accepted(candidates,grades)
                 covered={self.registry.resolve(d.metadata.get("source")) for d in accepted}
         if not accepted or not requested.issubset(covered):
