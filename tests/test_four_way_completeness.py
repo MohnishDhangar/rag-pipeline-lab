@@ -22,4 +22,4 @@ def test_report_require_all_four_arms(tmp_path):
         report(target,judged,dataset,out,require_complete=True)
     assert not out.exists()
     with pytest.raises(ValueError,match="Expected/observed question IDs differ"):
-        report(target,judged,dataset,out,expected_ids=["q","other"],require_complete=False)
+        report(target,judged,dataset,out,expected_ids=[],require_complete=False)
