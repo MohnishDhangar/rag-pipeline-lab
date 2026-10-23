@@ -39,3 +39,9 @@ eval/generated_gpt_provenance.jsonl
 
 eval/retrieval_ablation_v2_rescored.jsonl
 eval/retrieval_ablation_fresh.jsonl
+
+# Adaptive retrieval experiment outputs
+eval/router_replay_63.json
+eval/generated_gpt_adaptive_pilot.jsonl
+eval/gpt_judge_adaptive_pilot.jsonl
+eval/adaptive_answer_comparison.json

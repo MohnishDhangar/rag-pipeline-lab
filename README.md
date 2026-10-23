@@ -306,3 +306,65 @@ appending to the earlier checkpoint. Stored passage IDs that start with
 because that file doesn't include chunk text; offline rescoring leaves these
 IDs in place and marks `passage_id_needs_regeneration`. Future freshly retrieved
 passages will receive corrected `xpinn:<digest>` IDs automatically.
+
+
+## Milestone: label-free adaptive retrieval and paired answer testing
+
+The 63-question similarity/MMR results suggested that similarity concentrates
+relevant-paper chunks while MMR can improve distinct-paper coverage on some
+cross-document questions. The **63 questions have already been inspected**;
+offline replay on them is exploratory, not a held-out evaluation.
+
+The original PINN PDF filename is now an audited alias in the canonical registry.
+This fixes the 29 unknown source-paper labels found in the 126 retrievals without
+rebuilding Chroma. Legacy 'unknown:' passage IDs in saved JSONL stay unchanged
+because their content hashes cannot be reconstructed from metadata alone.
+
+**First: replay a fixed text-only router against existing retrievals.
+No Gemini or GPT calls.**
+
+~~~bash
+python -m rag_lab.evaluation.router_replay \
+  --input eval/retrieval_ablation_63.jsonl \
+  --output eval/router_replay_63.json
+~~~
+
+The output compares similarity everywhere, MMR everywhere, and the router's
+chosen mode; it includes type-specific means and the prediction-vs-gold
+confusion matrix. The router consumes only question text, never gold
+question_type, source_documents, reference answers, or retrieved labels.
+
+**Second: compare downstream GPT answer quality on selected paired questions.**
+The generation --ids flag avoids generating all 63 questions again.
+The adaptive strategy currently supports plain dense Chroma, using
+k=4, fetch_k=20, lambda_mult=.5 when the text router selects MMR.
+
+~~~bash
+python -m rag_lab.evaluation.generate \
+  --strategies naive adaptive --backends dense \
+  --ids b1_ntk_pinn_01 b1_gns_03 b2_cross_004 \
+        b3_cross_007 b3_pignn_accel_005 \
+  --output eval/generated_gpt_adaptive_pilot.jsonl
+
+python -m rag_lab.evaluation.benchmark judge \
+  --input eval/generated_gpt_adaptive_pilot.jsonl \
+  --output eval/gpt_judge_adaptive_pilot.jsonl
+
+python -m rag_lab.evaluation.compare_answers \
+  --generated eval/generated_gpt_adaptive_pilot.jsonl \
+  --judged eval/gpt_judge_adaptive_pilot.jsonl \
+  --output eval/adaptive_answer_comparison.json
+~~~
+
+The first command makes up to 10 GPT generation requests plus Gemini
+query-embedding requests. The second can make up to 10 additional GPT
+judge requests. The final comparison makes zero API calls and uses exact
+generation fingerprints to exclude stale judge scores. Use distinct
+output files for materially different experiments.
+
+GPT rubric scores are not independent scientific ground truth; manually
+review evidence and answer accuracy for a subset. Router heuristics were
+formulated after examining this benchmark, so improvement here is exploratory.
+Freeze the policy and evaluate on new, independently created questions
+before claiming held-out superiority. Paper-level recall is not evidence-level
+relevance or answer faithfulness.
