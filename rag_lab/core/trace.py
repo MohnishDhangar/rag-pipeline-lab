@@ -30,6 +30,8 @@ class TraceableStrategy:
     """Strategies set self.last_contexts during run, never in a second retrieval."""
     def run_with_trace(self, question):
         self.last_contexts = []
+        transport=getattr(getattr(self,"llm",None),"_transport",None)
+        before=getattr(transport,"calls",0)
         start = time.perf_counter()
         answer = self.run(question)
         docs = self.last_contexts
@@ -37,4 +39,5 @@ class TraceableStrategy:
                          strategy=type(self).__name__,
                          contexts=[getattr(d,"page_content",str(d)) for d in docs],
                          sources=[source_record(d) for d in docs],
-                         latency_ms=round(1000*(time.perf_counter()-start),2))
+                         latency_ms=round(1000*(time.perf_counter()-start),2),
+                         trace={"gpt_requests":getattr(transport,"calls",0)-before})

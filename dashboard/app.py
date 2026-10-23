@@ -21,6 +21,7 @@ with tab_live:
     backend=st.selectbox("Retrieval backend",["dense","colbert"])
     strategy=st.selectbox("Strategy",["adaptive","naive","multi_query","rag_fusion",
                                      "hyde","step_back","decomposition"])
+    use_graph=st.checkbox("Augment retrieval with scientific evidence graph",value=False)
     if st.button("Generate answer",disabled=not q.strip()):
         try:
             from rag_lab.evaluation.generate import create_backend, make_strategy
@@ -30,6 +31,10 @@ with tab_live:
             model=os.environ.get("RAG_GPT_MODEL")
             if not model: raise ValueError("Set RAG_GPT_MODEL after OAuth model discovery")
             store=create_backend(backend,Path("."))
+            if use_graph:
+                from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
+                from rag_lab.knowledge.evidence_graph import EvidenceGraph
+                store=EvidenceAugmentedVectorStore(store,EvidenceGraph.load("data/evidence_graph.json"))
             llm=build_chat_model(model=model)
             if strategy=="adaptive":
                 names=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"]

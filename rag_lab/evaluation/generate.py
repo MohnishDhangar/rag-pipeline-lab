@@ -34,7 +34,7 @@ def make_strategy(name, backend, llm):
                   step_back=StepBackStrategy,decomposition=DecompositionStrategy)
     return registry[name](backend,llm=llm)
 
-def generate(root, results, strategies, backends, model=None, limit=None):
+def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None):
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
     from pathlib import Path as _Path
@@ -47,10 +47,15 @@ def generate(root, results, strategies, backends, model=None, limit=None):
     count=0
     for backend_name in backends:
         store=create_backend(backend_name,root)
+        if graph_path:
+            from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
+            from rag_lab.knowledge.evidence_graph import EvidenceGraph
+            store=EvidenceAugmentedVectorStore(store,EvidenceGraph.load(graph_path))
+        backend_key=backend_name+"+graph" if graph_path else backend_name
         for name in strategies:
             strategy=make_strategy(name,store,llm)
             for q in questions:
-                key=(name,backend_name,q["id"])
+                key=(name,backend_key,q["id"])
                 if key in done: continue
                 try:
                     result=strategy.run_with_trace(q["question"])
@@ -60,7 +65,7 @@ def generate(root, results, strategies, backends, model=None, limit=None):
                             name=_Path(str(source["source"])).name.lower()
                             source["paper_id"]=file_ids.get(name)
                     row={**result.to_dict(), "id":q["id"],
-                         "strategy":name,"backend":backend_name,
+                         "strategy":name,"backend":backend_key,
                          "question_type":q.get("question_type"),
                          "ground_truth":q.get("ground_truth"),
                          "source_documents":q.get("source_documents"),
@@ -81,7 +86,8 @@ def main():
     p.add_argument("--strategies",nargs="+",default=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"])
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
     p.add_argument("--limit",type=int)
+    p.add_argument("--graph",type=Path,help="Optional built scientific evidence graph")
     a=p.parse_args()
-    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit))
+    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph))
 
 if __name__=="__main__": main()

@@ -1,6 +1,7 @@
 """ChatGPT Plus OAuth Responses streaming transport + LangChain adapter."""
 import json, os
 import requests
+from rag_lab.core.cache import ResponseCache
 from .chatgpt_oauth import OAuthSession, RESOURCE
 
 class InferenceError(RuntimeError):
@@ -24,10 +25,20 @@ class GPTTransport:
         self.model = model or os.environ.get("RAG_GPT_MODEL")
         if not self.model:
             raise ValueError("Set RAG_GPT_MODEL to an account-listed model slug")
+        self.cache=ResponseCache(os.environ["RAG_GPT_CACHE"]) if os.environ.get("RAG_GPT_CACHE") else None
+        self.calls=0
+        self.cache_hits=0
+        self.usage_totals={"input_tokens":0,"output_tokens":0,"total_tokens":0}
 
     def generate(self, input, instructions=None):
         payload = dict(model=self.model, input=input, store=False, stream=True)
         if instructions: payload["instructions"] = instructions
+        key=self.cache.key(self.model,payload) if self.cache else None
+        if key:
+            cached=self.cache.get(key)
+            if cached:
+                self.cache_hits+=1
+                return cached[0], {**cached[1],"cached":True}
         headers = {"Authorization": "Bearer "+self.auth.token(),
                    "Content-Type":"application/json", "Accept":"text/event-stream"}
         with self.http.post(RESOURCE+"/responses", headers=headers, json=payload,
@@ -51,7 +62,12 @@ class GPTTransport:
                     raise InferenceError("Stream failed: "+str(code or typ), code=code)
             if not finished:
                 raise InferenceError("Stream ended without response.completed")
-            return "".join(pieces), usage
+            self.calls+=1
+            for field in self.usage_totals:
+                self.usage_totals[field]+=usage.get(field,0)
+            text="".join(pieces)
+            if key: self.cache.put(key,text,usage)
+            return text, usage
 
 def _convert(messages):
     instructions, items = [], []
