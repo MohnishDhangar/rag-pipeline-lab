@@ -31,9 +31,7 @@ class FakeStore:
 
 
 class Chat:
-    def __or__(self,other):
-        return self
-    def invoke(self,inputs):
+    def __call__(self,inputs):
         return "Training noise protects rollouts [SOURCE gns:pdfpage5]"
 
 

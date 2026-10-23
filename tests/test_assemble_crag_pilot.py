@@ -51,5 +51,5 @@ def test_do_not_mix_older_crag_algorithm_with_new_report(tmp_path):
     wrong[0]["trace"]["crag"]["version"]="closed-corpus-crag-v3"
     write(bg,base);write(cg,wrong)
     bj.write_text("");cj.write_text("")
-    with pytest.raises(ValueError,match="Expected v4"):
+    with pytest.raises(ValueError,match="Expected closed-corpus-crag-v4"):
         assemble(bg,bj,cg,cj,tmp_path/"g",tmp_path/"j",ids=["q"])
