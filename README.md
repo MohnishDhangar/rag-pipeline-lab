@@ -180,3 +180,37 @@ hosted using your personal tokens**.
 - RAGAS releases may need minor version-specific integration adjustments.
 - The evidence association graph uses deterministic term extraction, not
   validated theorem or causal relationship extraction.
+
+
+## Chroma index repair: empty contexts in GPT generation
+
+The original foundation notebook used the literal path
+`~/Codes/rag-lab/data/chroma_naive_gemini` without expanding the home
+directory. Its 576 embedded chunks may have been written below a directory
+**literally named `~`**, depending on the notebook kernel's working directory.
+
+Do not regenerate embeddings or delete indexes before locating the existing one.
+
+~~~bash
+cd /home/mohnish/Codes/rag-lab
+find . -name chroma.sqlite3 -print
+python -m rag_lab.retrieval.chroma_health --search-root .
+~~~
+
+Use the location containing **nonzero chunks** in the `langchain` collection.
+For example, if it is under the notebooks folder:
+
+~~~bash
+python -m rag_lab.evaluation.generate --strategies naive --backends dense \
+  --limit 3 \
+  --chroma-path 'notebooks/~/Codes/rag-lab/data/chroma_naive_gemini' \
+  --output eval/generated_gpt_repaired.jsonl
+~~~
+
+Use the actual directory from the diagnostic; the shown path is only an example.
+If the populated collection name differs, use `--chroma-collection NAME`.
+
+The generation CLI now fails before any GPT request when the selected Chroma
+collection is empty, retries previous empty-evidence attempts rather than
+treating them as completed, and excludes zero-evidence attempts from judge
+scoring. The naive strategy also avoids calling GPT on empty retrieval results.

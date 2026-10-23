@@ -27,7 +27,7 @@ def benchmark(input_path, output_path, mode):
     }
     successful = 0
     for row in read_jsonl(input_path):
-        if not row.get("answer"): continue
+        if not row.get("answer") or not row.get("contexts"): continue  # no GPT judging on missing evidence
         key=(row.get("strategy"),row.get("backend"),row.get("id"),
              RUBRIC_VERSION if mode=="judge" else None)
         if key in completed: continue

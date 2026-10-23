@@ -28,6 +28,9 @@ class NaiveStrategy(TraceableStrategy):
         """Generate from exactly the same documents captured for evaluation."""
         docs = self.retrieve(query)
         self.last_contexts = docs
+        if not docs:
+            # Avoid spending GPT quota on a request without source evidence.
+            return "Insufficient retrieved evidence to answer this question."
         context = "\n\n".join(format_context(d) for d in docs)
         return (self.prompt | self.llm | StrOutputParser()).invoke(
             {"context": context, "question": query}
