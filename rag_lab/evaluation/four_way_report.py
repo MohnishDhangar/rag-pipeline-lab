@@ -21,7 +21,8 @@ ARMS=(("dense","naive"),("colbert","naive"),("dense","crag"),("colbert","crag"))
 JUDGE_KEYS=("faithfulness","answer_correctness","answer_relevance","citation_support")
 
 
-def report(generated, judged, eval_set, output, *, expected_ids=None, require_complete=False):
+def report(generated, judged, eval_set, output, *, expected_ids=None,
+           require_complete=False, require_judged=False):
     output=Path(output)
     if output.exists():raise FileExistsError(str(output))
     data=json.loads(Path(eval_set).read_text(encoding="utf-8"))
@@ -70,6 +71,10 @@ def report(generated, judged, eval_set, output, *, expected_ids=None, require_co
     incomplete=[qid for qid,rows in by_question.items() if len(rows)!=len(ARMS)]
     if require_complete and incomplete:
         raise ValueError(f"Incomplete four-arm experiment: {sorted(incomplete)}")
+    unjudged=[f"{qid}/{arm}" for qid,rows in by_question.items()
+              for arm,row in rows.items() if row["answered"] and row["judge"] is None]
+    if require_judged and unjudged:
+        raise ValueError(f"Unjudged answered rows: {sorted(unjudged)}")
     arms={}
     for key in ARMS:
         rows=arm_rows[key]
@@ -95,6 +100,7 @@ def report(generated, judged, eval_set, output, *, expected_ids=None, require_co
             "total_questions_observed":len(by_question),
             "incomplete_question_ids":[qid for qid in sorted(by_question)
                                        if qid not in complete_ids],
+            "unjudged_answer_rows":sorted(unjudged),
             "all_four_arms_judged_count":sum(
                 len(arms_for_q)==len(ARMS) and all(
                     row["judge"] is not None or not row["answered"]
@@ -116,9 +122,12 @@ def main():
     p.add_argument("--expected-ids",nargs="+",help="Require this exact question set in the report")
     p.add_argument("--require-complete",action="store_true",
                    help="Fail if any observed question is missing a four-way arm")
+    p.add_argument("--require-judged",action="store_true",
+                   help="Fail if any answered row lacks a matching judge fingerprint")
     a=p.parse_args()
     result=report(a.generated,a.judged,a.eval_set,a.output,
-                  expected_ids=a.expected_ids,require_complete=a.require_complete)
+                  expected_ids=a.expected_ids,require_complete=a.require_complete,
+                  require_judged=a.require_judged)
     print(json.dumps({"arms":result["arms"],"all_four_arms_count":
                       result["all_four_arms_count"]},indent=2))
 

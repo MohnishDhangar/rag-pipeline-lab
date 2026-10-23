@@ -24,11 +24,15 @@ def verify(root, *, ids=DEFAULT_IDS, expected_chunks=576):
                   or (root/"data"/"chroma_naive_gemini"))
     collection=os.environ.get("RAG_CHROMA_COLLECTION","langchain")
     counts["chroma"]=require_populated_index(location,collection)
+    if counts["chroma"]!=expected_chunks:
+        raise ValueError(f"Chroma has {counts['chroma']} passages; expected {expected_chunks}")
     colbert=check(root,expected_chunks=expected_chunks)
     if importlib.util.find_spec("pylate") is None:
         raise RuntimeError("PyLate unavailable in this interpreter")
     if importlib.util.find_spec("jwt") is None:
         raise RuntimeError('GPT OAuth requires PyJWT: python -m pip install "PyJWT[crypto]>=2.8"')
+    if importlib.util.find_spec("langchain_classic") is None:
+        raise RuntimeError('Install strategy dependencies: pip install -e ".[rag,dev]"')
     if importlib.util.find_spec("langchain_google_genai") is None:
         raise RuntimeError('Install dense retrieval dependencies: pip install -e ".[rag,dev]"')
     if not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):

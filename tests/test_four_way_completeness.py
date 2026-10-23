@@ -23,3 +23,26 @@ def test_report_require_all_four_arms(tmp_path):
     assert not out.exists()
     with pytest.raises(ValueError,match="Expected/observed question IDs differ"):
         report(target,judged,dataset,out,expected_ids=[],require_complete=False)
+
+
+def test_require_judged_rejects_missing_rubric(tmp_path):
+    dataset=tmp_path/"eval.json"
+    dataset.write_text(json.dumps({
+        "metadata":{"papers":[{"short_id":"gns","file":"gns.pdf"}]},
+        "questions":[{"id":"q","source_documents":["gns"]}]
+    }))
+    generated=tmp_path/"gen.jsonl"
+    gen_rows=[{
+        "id":"q","backend":backend,"strategy":strategy,
+        "contexts":["evidence"],"answer":"Supported [SOURCE]",
+        "sources":[{"paper_id":"gns","source":"gns.pdf"}],
+        "trace":{"gpt_requests":1}}
+        for backend in ("dense","colbert") for strategy in ("naive","crag")]
+    generated.write_text("".join(json.dumps(x)+"\n" for x in gen_rows))
+    judged=tmp_path/"judged.jsonl"
+    judged.write_text("")
+    result=tmp_path/"out.json"
+    with pytest.raises(ValueError,match="Unjudged answered rows"):
+        report(generated,judged,dataset,result,
+               expected_ids=["q"],require_complete=True,require_judged=True)
+    assert not result.exists()

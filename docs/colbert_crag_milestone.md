@@ -208,7 +208,7 @@ model selection. It neither loads PLAID weights nor requests an access token.
   --generated eval/generated_crag_v3_pilot.jsonl \
   --judged eval/judged_crag_v3_pilot.jsonl \
   --expected-ids b1_gns_03 b1_cross_01 b2_cross_003 \
-  --require-complete \
+  --require-complete --require-judged \
   --output eval/four_way_crag_v3_summary.json
 ~~~
 
