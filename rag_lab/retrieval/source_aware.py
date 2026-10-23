@@ -39,7 +39,7 @@ def requested_sources(question: str, registry=None) -> SourceRequest:
     found=[]
     matching=[]
     for paper_id,aliases in EXPLICIT_NAMES.items():
-        if registry is not None and paper_id not in registry.paper_ids:
+        if registry is not None and paper_id not in set(registry.by_filename.values()):
             continue
         for alias in aliases:
             rx=r"(?<![a-zA-Z0-9])"+re.escape(alias)+r"(?![a-zA-Z0-9])"
