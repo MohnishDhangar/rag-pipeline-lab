@@ -36,7 +36,7 @@ def make_strategy(name, backend, llm):
                   step_back=StepBackStrategy,decomposition=DecompositionStrategy)
     return registry[name](backend,llm=llm)
 
-def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None):
+def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None, verify_on_warning=False):
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
     from pathlib import Path as _Path
@@ -60,7 +60,10 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                 key=(name,backend_key,q["id"])
                 if key in done: continue
                 try:
-                    result=strategy.run_with_trace(q["question"])
+                    from rag_lab.core.pipeline import EvidenceAwarePipeline
+                    result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning).run_with_trace(
+                        q["question"],cross_document=q.get("question_type")=="cross_document"
+                    )
                     # Enrich source provenance using corpus file names, never question labels.
                     for source in result.sources:
                         if not source.get("paper_id") and source.get("source"):
@@ -89,7 +92,8 @@ def main():
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
     p.add_argument("--limit",type=int)
     p.add_argument("--graph",type=Path,help="Optional built scientific evidence graph")
+    p.add_argument("--verify-on-warning",action="store_true",help="Spend one additional GPT call for uncertain answers")
     a=p.parse_args()
-    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph))
+    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph,a.verify_on_warning))
 
 if __name__=="__main__": main()

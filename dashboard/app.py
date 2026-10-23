@@ -22,6 +22,7 @@ with tab_live:
     strategy=st.selectbox("Strategy",["adaptive","naive","multi_query","rag_fusion",
                                      "hyde","step_back","decomposition"])
     use_graph=st.checkbox("Augment retrieval with scientific evidence graph",value=False)
+    verify_flag=st.checkbox("GPT verify answers with uncertain evidence (extra inference)",value=False)
     if st.button("Generate answer",disabled=not q.strip()):
         try:
             from rag_lab.evaluation.generate import create_backend, make_strategy
@@ -43,7 +44,10 @@ with tab_live:
                 runner=AdaptiveRouter(alternatives,path if path.exists() else None)
             else:
                 runner=make_strategy(strategy,store,llm)
-            result=runner.run_with_trace(q)
+            from rag_lab.core.pipeline import EvidenceAwarePipeline
+            result=EvidenceAwarePipeline(runner,verify_on_warning=verify_flag).run_with_trace(
+                q,cross_document=("compare" in q.lower() or "contrast" in q.lower())
+            )
             st.session_state["current_result"]=result.to_dict()
         except Exception as exc:
             st.error(type(exc).__name__+": "+str(exc))
@@ -53,6 +57,7 @@ with tab_live:
         st.write(result["answer"])
         st.caption("Selected strategy: "+str(result.get("trace",{}).get("selected_route",result["strategy"])))
         st.write("Latency (ms):",result["latency_ms"])
+        st.write("Reliability:",result.get("trace",{}).get("reliability"))
         with st.expander("Retrieved source evidence"):
             for src,context in zip(result["sources"],result["contexts"]):
                 st.write(src)
