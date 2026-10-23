@@ -28,7 +28,7 @@ CRAG_VERSION="closed-corpus-crag-v4"
 
 
 def assemble(baseline_generated,baseline_judged,candidate_generated,
-             candidate_judged,generated,judged,ids):
+             candidate_judged,generated,judged,ids,crag_version=CRAG_VERSION):
     expected_ids=tuple(ids)
     if not expected_ids or len(expected_ids)!=len(set(expected_ids)):
         raise ValueError("Pass distinct, nonempty --ids")
@@ -46,8 +46,8 @@ def assemble(baseline_generated,baseline_judged,candidate_generated,
             if key in selected:
                 raise ValueError(f"Duplicate generated pilot row: {key}")
             if strategy=="crag":
-                if ((row.get("trace") or {}).get("crag") or {}).get("version")!=CRAG_VERSION:
-                    raise ValueError(f"Expected v4 corrective trace, got {key}")
+                if ((row.get("trace") or {}).get("crag") or {}).get("version")!=crag_version:
+                    raise ValueError(f"Expected {crag_version} corrective trace, got {key}")
             selected[key]=row
     expected={(qid,backend,strategy)
               for qid in expected_ids for backend in BACKENDS
@@ -100,7 +100,8 @@ def assemble(baseline_generated,baseline_judged,candidate_generated,
         for row in selected_judges:j.write(json.dumps(row,ensure_ascii=False)+"\n")
     return {"generation_rows":len(rows),"judged_rows":len(selected_judges),
             "naive_baseline_reused":len(expected_ids)*len(BACKENDS),
-            "crag_v4_records":len(expected_ids)*len(BACKENDS)}
+            "candidate_crag_version":crag_version,
+            "candidate_crag_records":len(expected_ids)*len(BACKENDS)}
 
 
 def main():
@@ -109,6 +110,8 @@ def main():
                  "candidate-judged","generated","judged"):
         p.add_argument("--"+name,required=True)
     p.add_argument("--ids",nargs="+",required=True)
+    p.add_argument("--crag-version",default=CRAG_VERSION,
+                   help="Exact candidate CRAG trace version; e.g. closed-corpus-crag-v5")
     a=p.parse_args()
     kw={key.replace("-","_"):value for key,value in vars(a).items()}
     print(json.dumps(assemble(**kw),indent=2))

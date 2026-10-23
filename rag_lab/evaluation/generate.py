@@ -72,7 +72,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
         json.dumps(row.get("retrieval_config"), sort_keys=True)
         if name in ("adaptive","crag","adaptive_v2") else None
     )
-    crag_config={"version":"closed-corpus-crag-v4",
+    crag_config={"version":"closed-corpus-crag-v5",
                  "max_grades":crag_max_grades,"pool_k":crag_pool_k}
     controller_config={"version":CONTROLLER_V2_VERSION,
                        "max_grader_calls":controller_grader_budget,

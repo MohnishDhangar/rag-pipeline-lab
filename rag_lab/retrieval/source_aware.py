@@ -145,6 +145,10 @@ class SourceAwareRetriever:
                 targeted[paper]=docs[:max(2,quota)]
             else:
                 candidates.extend(docs[:max(quota-current,1)])
+        # Grade a wider but bounded evidence set during correction. Final
+        # answer context selection remains limited to k in CRAG.
+        selection_limit=(min(self.pool_k,max(self.k*2,self.k))
+                         if widen else self.k)
         # Preserve at least one passage per explicit source if available;
         # fill remaining slots from initial rank order.
         chosen=[]
@@ -161,21 +165,22 @@ class SourceAwareRetriever:
             if paper not in targeted: continue
             for d in targeted[paper]:
                 key=document_key(d)
-                if key not in used and len(chosen)<self.k:
+                if key not in used and len(chosen)<selection_limit:
                     chosen.append(d);used.add(key)
         for d in candidates:
             key=document_key(d)
-            if key not in used and len(chosen)<self.k:
+            if key not in used and len(chosen)<selection_limit:
                 chosen.append(d);used.add(key)
         covered={self.registry.resolve(d.metadata.get("source")) for d in chosen}
         missing=[paper for paper in target_ids if paper not in covered]
-        return chosen[:self.k],{
+        return chosen[:selection_limit],{
             "requested_papers":target_ids,
             "matched_aliases":list(request.explicit_matches),
             "unresolved_scope":request.unresolved_scope,
             "missing_requested_papers":missing,
             "targeted_retrieval_queries":retries,
             "correction_widened":bool(widen),
+            "selection_limit":selection_limit,
             "excluded_previous_passages":len(excluded),
             "forced_paper_retries":sorted(forced),
             "targeted_results_by_paper":{paper:len(docs)
