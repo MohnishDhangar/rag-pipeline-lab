@@ -327,3 +327,84 @@ The grade trace now distinguishes those failure causes.
 The experiment remains on the previously inspected questions; a separate,
 unseen and human-verified sample is required before scientific reliability
 or performance claims.
+
+
+## CRAG v5: bounded quote-recovery experiment (after v4 pilot)
+
+The 2026-10 pilot generated 6 CRAG v4 records. Answer coverage rose
+from v3's **2/6** to **4/6**, but the GNS ColBERT arm regressed to abstention
+despite having an initially retrieved GNS passage. The v4 trace contained
+**7 passages** that the GPT relevance grader labelled \`correct\` but whose
+quotes **did not exactly occur** in the corresponding source text. The
+exact-quote gate correctly rejected them; the v4 corrective step then
+discarded these passages, often losing strong evidence.
+
+Other issues remain: the comparative CRAG v4 answers have incomplete
+scientific coverage, with judged correctness of just 0.40–0.56 for the
+answered cross-paper cases. We must not inflate correctness by averaging
+only answered questions. The three questions are already tuning examples,
+**not held-out evidence**.
+
+### New v5 behavior
+
+- First-grade \`correct\` claims with **invalid** exact quotes are still
+  rejected. Up to **two** of these previously unverified passages may be
+  reconsidered in the second (and last) grading call, rather than discarded.
+- The *corrective grading* candidate set includes up to **8 new** passages
+  (from an initial pool of up to 28), plus up to 2 quote rechecks; the *final
+  context* remains capped at 4 exact-quote-verified passages.
+- The grader is explicitly instructed to copy a character-for-character
+  substring, preserving PDF line breaks. Quote previews are logged for
+  postmortem inspection; **unverifiable quotations remain unacceptable**.
+- Both GPT grading-call budget (maximum 2) and provenance guarantees remain
+  unchanged. Additional passages can increase *input tokens*, so compare
+  token use and latency as well as call counts.
+
+### Launch a NEW v5 experiment without overwriting any v3/v4 data
+
+~~~fish
+cd ~/Codes/rag-lab
+git pull --ff-only origin feature/adaptive-rag-gpt-oauth
+set PY "$HOME/my-jupyter-env/bin/python"
+"$PY" -m pytest -q
+"$PY" -m rag_lab.evaluation.crag_preflight --root .
+
+# Keep exactly the same RAG_GPT_MODEL as in v3 and v4.
+"$PY" -m rag_lab.evaluation.generate \
+  --strategies crag --backends dense colbert \
+  --ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --crag-max-grades 2 --crag-pool-k 28 \
+  --output eval/generated_crag_v5_pilot.jsonl
+
+"$PY" -m rag_lab.evaluation.benchmark judge \
+  --input eval/generated_crag_v5_pilot.jsonl \
+  --output eval/judged_crag_v5_pilot.jsonl
+
+"$PY" -m rag_lab.evaluation.assemble_crag_pilot \
+  --baseline-generated eval/generated_crag_v3_pilot.jsonl \
+  --baseline-judged eval/judged_crag_v3_pilot.jsonl \
+  --candidate-generated eval/generated_crag_v5_pilot.jsonl \
+  --candidate-judged eval/judged_crag_v5_pilot.jsonl \
+  --generated eval/generated_crag_v5_four_way.jsonl \
+  --judged eval/judged_crag_v5_four_way.jsonl \
+  --crag-version closed-corpus-crag-v5 \
+  --ids b1_gns_03 b1_cross_01 b2_cross_003
+
+"$PY" -m rag_lab.evaluation.four_way_report \
+  --generated eval/generated_crag_v5_four_way.jsonl \
+  --judged eval/judged_crag_v5_four_way.jsonl \
+  --expected-ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --require-complete --require-judged \
+  --output eval/four_way_crag_v5_summary.json
+~~~
+
+The old naive baseline rows are reused only if the model slug, question
+text, and evaluation annotations are unchanged and matching judge
+fingerprints are present. Do not merge v4 CRAG rows as if they were v5.
+
+A useful *engineering regression* threshold is that the ColBERT GNS arm
+does not lose its initially relevant passage solely because the grader
+failed to copy an exact quote. A useful *research* threshold is reliable
+completeness and accuracy on **new**, independently labelled and
+human-reviewed examples. Passing the engineering threshold does not
+establish generalization or prove that CRAG outperforms naive retrieval.
