@@ -231,3 +231,99 @@ passage review. Source diversity is insufficient to establish passage-level
 support. The 576-chunk legacy ColBERT index was successfully checked by a
 live retrieval query but retains \`unverified_no_manifest\` until reindexed:
 do not create an unearned fingerprint manifest for the old PLAID index.
+
+
+## CRAG v4: source-filtered ColBERT correction after analyzing v3
+
+The 3-question v3 trial returned just one scientifically grounded CRAG answer per
+backend (the GNS random-walk noise question); both multi-paper questions
+abstained. Although GPT judge correctness was 1.0 conditional on answering,
+**answer coverage was only 1/3**, so conditional score means are misleading.
+The v3 dense naive GNS answer cited the **wrong** MeshGraphNets paper despite a
+high citation-support rating. Grounded source identity must be checked.
+
+v4 addresses a concrete implementation defect: the ColBERT retriever now maps
+\`source\` metadata to PyLate's native \`subset=[document IDs]\` search instead
+of globally retrieving top-28 and filtering them afterward. Source-aware
+search can target explicitly named papers in ColBERT just as it can in Chroma.
+It also logs per-passage grader decisions to explain which paper had merely
+retrieved content versus verified answer-bearing quotes.
+
+**Avoid reusing \`eval/generated_crag_v3_pilot.jsonl\` as v4 output.**
+The two CRAG algorithms differ. Preserve v3 files untouched.
+
+### Validate actual PyLate source restriction before spending GPT calls
+
+~~~fish
+cd ~/Codes/rag-lab
+git pull --ff-only origin feature/adaptive-rag-gpt-oauth
+set PY "$HOME/my-jupyter-env/bin/python"
+
+"$PY" -m rag_lab.retrieval.colbert_health \
+  --root . --expected-chunks 576 \
+  --query "How does the original Raissi PINN paper approach training difficulties?" \
+  --paper-id orig_pinn --k 4
+
+"$PY" -m rag_lab.retrieval.colbert_health \
+  --root . --expected-chunks 576 \
+  --query "How is the Laplacian approximated on an irregular triangular mesh?" \
+  --paper-id pignn_al --k 4
+~~~
+
+Both commands should report the requested paper ID for EVERY returned passage.
+These are CPU-local retrieval queries; no Gemini or GPT calls.
+
+### Run ONLY the six new CRAG v4 arms
+
+Keep the same \`RAG_GPT_MODEL=gpt-6-sol\` model (or the exact model used in v3)
+for a matched, reusable baseline.
+
+~~~fish
+"$PY" -m rag_lab.evaluation.crag_preflight --root .
+
+"$PY" -m rag_lab.evaluation.generate \
+  --strategies crag --backends dense colbert \
+  --ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --crag-max-grades 2 --crag-pool-k 28 \
+  --output eval/generated_crag_v4_pilot.jsonl
+
+"$PY" -m rag_lab.evaluation.benchmark judge \
+  --input eval/generated_crag_v4_pilot.jsonl \
+  --output eval/judged_crag_v4_pilot.jsonl
+~~~
+
+Unlike repeating all four arms, this does NOT regenerate the six naive answers.
+The conservative worst case is 18 GPT requests for corrective grading and
+answering, plus up to 6 GPT judge requests. Abstention reduces that number.
+
+### Merge the exact six naive v3 baselines and judge rows, offline
+
+~~~fish
+"$PY" -m rag_lab.evaluation.assemble_crag_pilot \
+  --baseline-generated eval/generated_crag_v3_pilot.jsonl \
+  --baseline-judged eval/judged_crag_v3_pilot.jsonl \
+  --candidate-generated eval/generated_crag_v4_pilot.jsonl \
+  --candidate-judged eval/judged_crag_v4_pilot.jsonl \
+  --generated eval/generated_crag_v4_four_way.jsonl \
+  --judged eval/judged_crag_v4_four_way.jsonl \
+  --ids b1_gns_03 b1_cross_01 b2_cross_003
+
+"$PY" -m rag_lab.evaluation.four_way_report \
+  --generated eval/generated_crag_v4_four_way.jsonl \
+  --judged eval/judged_crag_v4_four_way.jsonl \
+  --expected-ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --require-complete --require-judged \
+  --output eval/four_way_crag_v4_summary.json
+~~~
+
+The merger requires identical model slug, question text and evaluation
+annotations across v3 naive / v4 CRAG outputs, checks every judge fingerprint,
+rejects prior v3 CRAG rows, and never reruns inference.
+
+CRAG v4 is an **experimental fix**, not a proven improvement. It can still
+abstain when the correct passage is absent or the GPT grader rejects it.
+The grade trace now distinguishes those failure causes.
+
+The experiment remains on the previously inspected questions; a separate,
+unseen and human-verified sample is required before scientific reliability
+or performance claims.

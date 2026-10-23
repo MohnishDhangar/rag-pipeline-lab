@@ -84,6 +84,13 @@ def report(generated, judged, eval_set, output, *, expected_ids=None,
         arms[f"{key[0]}:{key[1]}"]={
             "n":len(rows),"answered":sum(x["answered"] for x in rows),
             "abstained_or_missing":sum(not x["answered"] for x in rows),
+            "answer_rate":sum(bool(x["answered"]) for x in rows)/len(rows) if rows else None,
+            "complete_source_coverage_on_all_questions":
+                sum(x["answered"] and x["paper_recall_at_4"]==1.0
+                    for x in rows)/len(rows) if rows else None,
+            "judge_correctness_times_answer_rate":
+                sum(x["judge"]["answer_correctness"] for x in judge_rows)/len(rows)
+                if rows and len(judge_rows)==sum(x["answered"] for x in rows) else None,
             "paper_recall_at_4":mean(r["paper_recall_at_4"] for r in scorable) if scorable else None,
             "chunk_precision_at_4":mean(r["chunk_precision_at_4"] for r in scorable) if scorable else None,
             "avg_latency_ms":mean(latency_values) if latency_values else None,
@@ -106,7 +113,7 @@ def report(generated, judged, eval_set, output, *, expected_ids=None,
                     row["judge"] is not None or not row["answered"]
                     for row in arms_for_q.values())
                 for arms_for_q in by_question.values()),
-            "limitations":"Scores are GPT-judged on answered rows; abstentions must remain in denominator."}
+            "limitations":"Judge scores average answered rows only. The correctness-times-answer-rate proxy treats abstentions as zero utility, not as incorrect factual assertions, and is not independent validation."}
     with output.open("x",encoding="utf-8") as f:
         json.dump(result,f,ensure_ascii=False,indent=2)
         f.write("\n")
