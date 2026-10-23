@@ -3,7 +3,7 @@
 python -m rag_lab.evaluation.benchmark retrieval --input eval/generated_gpt.jsonl
 python -m rag_lab.evaluation.benchmark judge --input eval/generated_gpt.jsonl
 """
-import argparse, json
+import argparse, json, hashlib
 from pathlib import Path
 
 from rag_lab.evaluation.metrics import score_retrieval
@@ -21,16 +21,31 @@ def read_jsonl(path):
             except json.JSONDecodeError: continue
     return rows
 
+RETRIEVAL_VERSION = "retrieval-metrics-v2"
+
+
+def row_fingerprint(row):
+    """Change-aware identity prevents stale scores when an answer/context changes."""
+    content={k:row.get(k) for k in ("id","strategy","backend","question",
+                                     "answer","contexts","sources","ground_truth",
+                                     "source_documents","model")}
+    data=json.dumps(content,ensure_ascii=False,sort_keys=True)
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
 def benchmark(input_path, output_path, mode, registry=None):
     completed = {
-        (r.get("strategy"),r.get("backend"),r.get("id"),r.get("judge_version") if mode=="judge" else None)
+        (r.get("strategy"),r.get("backend"),r.get("id"),
+         r.get("judge_version") if mode=="judge" else r.get("metric_version"),
+         r.get("input_fingerprint"))
         for r in read_jsonl(output_path)
     }
     successful = 0
     for row in read_jsonl(input_path):
         if not row.get("answer") or not row.get("contexts"): continue  # no GPT judging on missing evidence
+        signature=row_fingerprint(row)
         key=(row.get("strategy"),row.get("backend"),row.get("id"),
-             RUBRIC_VERSION if mode=="judge" else None)
+             RUBRIC_VERSION if mode=="judge" else RETRIEVAL_VERSION, signature)
         if key in completed: continue
         if mode=="retrieval":
             sources=row.get("sources") or []
@@ -48,7 +63,8 @@ def benchmark(input_path, output_path, mode, registry=None):
                 print("Judge stopped; checkpoint preserved:",type(exc).__name__,str(exc))
                 break
         append_jsonl(output_path, {"strategy":row.get("strategy"),"backend":row.get("backend"),
-                                    "id":row.get("id"),**scores})
+                                    "id":row.get("id"),"metric_version":RETRIEVAL_VERSION if mode=="retrieval" else None,
+                                    "input_fingerprint":signature,**scores})
         completed.add(key)
         successful+=1
     return successful
@@ -60,8 +76,8 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--eval",default="eval/eval_set.json",help="Ground-truth registry (no retrieval leakage)")
     args=parser.parse_args()
-    output=args.output or ("eval/retrieval_metrics.jsonl" if args.mode=="retrieval"
-                           else "eval/gpt_judge_scores.jsonl")
+    output=args.output or ("eval/retrieval_metrics_v2.jsonl" if args.mode=="retrieval"
+                           else "eval/gpt_judge_scores_v2.jsonl")
     registry=PaperRegistry.from_eval(json.loads(Path(args.eval).read_text()))
     print("New rows:",benchmark(args.input,output,args.mode,registry))
 
