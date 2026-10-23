@@ -30,3 +30,9 @@ eval/retrieval_metrics.jsonl
 
 .DS_Store
 Thumbs.db
+
+# v2 experiment outputs
+eval/retrieval_ablation_v2.jsonl
+eval/retrieval_metrics_v2.jsonl
+eval/gpt_judge_scores_v2.jsonl
+eval/generated_gpt_provenance.jsonl

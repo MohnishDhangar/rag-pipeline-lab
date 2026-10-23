@@ -12,7 +12,10 @@ class EvidenceAugmentedVectorStore:
         base_docs=self.base.similarity_search(query,k=k)
         graph_docs=[
             Document(page_content=e.text,
-                     metadata={"id":e.id,"paper_id":e.paper_id,"page":e.page,
+                     metadata={"id":e.id,"paper_id":e.paper_id,
+                               "page":e.page-1 if e.page is not None else None,
+                               "pdf_page_index":e.page-1 if e.page is not None else None,
+                               "pdf_page_number":e.page,
                                "source":e.source,"retrieval_type":"evidence_graph"})
             for e in self.graph.query(query,k=k)
         ]

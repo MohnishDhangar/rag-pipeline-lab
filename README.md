@@ -214,3 +214,68 @@ The generation CLI now fails before any GPT request when the selected Chroma
 collection is empty, retries previous empty-evidence attempts rather than
 treating them as completed, and excludes zero-evidence attempts from judge
 scoring. The naive strategy also avoids calling GPT on empty retrieval results.
+
+
+## Source provenance and retrieval quality (v2)
+
+Every retrieved passage is now annotated *before* generation using a canonical
+paper registry in rag_lab/knowledge/paper_registry.py. The registry is built
+from eval/eval_set.json filenames, exact normalized titles and a short list of
+audited aliases for PDF filenames that differ from the dataset metadata. It
+does not consult a question's gold source_documents when identifying a paper,
+and deliberately leaves unknown filenames unresolved rather than inventing
+a match. Add any new verified aliases to ALIASES before reporting retrieval
+scores. New passage IDs are content-addressed, and generated citations
+refer to PDF page numbers starting at 1 rather than the loader's zero-based
+page index. A PDF page is not necessarily the same as the printed page number.
+
+### Repair already generated answers (zero GPT and Gemini usage)
+
+~~~bash
+python -m rag_lab.evaluation.provenance_repair \
+  --input eval/generated_gpt_repaired.jsonl \
+  --output eval/generated_gpt_provenance.jsonl
+~~~
+
+The old answer strings stay unchanged, including their original citation
+format. Source records receive canonical paper IDs, distinct passage IDs,
+and legacy citation IDs for independent audit. Originals are NEVER replaced.
+
+Compute paper-aware metrics with no model requests:
+
+~~~bash
+python -m rag_lab.evaluation.benchmark retrieval \
+  --input eval/generated_gpt_provenance.jsonl \
+  --output eval/retrieval_metrics_v2.jsonl
+~~~
+
+Metrics now evaluate the original **top-k retrieved chunks**, not a
+deduplicated rank list of papers. Report chunk precision@k, distinct-paper
+recall@k, MRR@k, and novelty-aware nDCG@k, alongside the proportion of source
+chunks with resolvable provenance. If any chunk ID is unknown, the ranking
+metrics are null rather than silently treating an unidentified paper as
+irrelevant. Outputs have metric version and content fingerprint fields so
+old invalid scores are never mistaken for a fresh evaluation.
+
+### Compare retrieval techniques without GPT generation
+
+~~~bash
+python -m rag_lab.evaluation.retrieval_compare \
+  --modes similarity mmr --k 4 --fetch-k 20 \
+  --lambda-mult 0.5 --limit 10 \
+  --output eval/retrieval_ablation_v2.jsonl
+~~~
+
+This invokes **Gemini query embeddings** for retrieval, but does not call
+GPT or regenerate answers. Extend --limit to cover the 63-question dataset.
+Compare performance by question type and source coverage. MMR favors
+diversity; it is an experimental alternative, not presumed superior to
+similarity search. Only promote MMR or other reranking if held-out retrieval
+quality improves without unacceptable latency. MMR changes the underlying
+retrieved evidence, so an answer-quality comparison would subsequently
+require new GPT responses for that separate retrieval configuration.
+
+The judge uses a separate custom GPT rubric; it does not produce RAGAS
+metrics unless the separate RAGAS adapter is used. Versioned evaluation
+scores should not be compared across prompts or paper registries without
+carefully aligning labels and the retrieval corpus.
