@@ -45,3 +45,11 @@ eval/router_replay_63.json
 eval/generated_gpt_adaptive_pilot.jsonl
 eval/gpt_judge_adaptive_pilot.jsonl
 eval/adaptive_answer_comparison.json
+
+# ColBERT/CRAG experimental outputs
+eval/retrieval_backends_pilot.jsonl
+eval/retrieval_backends_63.jsonl
+eval/generated_four_way_pilot.jsonl
+eval/judged_four_way_pilot.jsonl
+eval/four_way_pilot_summary.json
+eval/generated_adaptive_v2_pilot.jsonl

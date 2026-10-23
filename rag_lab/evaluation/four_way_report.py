@@ -62,13 +62,13 @@ def report(generated, judged, eval_set, output):
         rows=arm_rows[key]
         scorable=[r for r in rows if r["paper_recall_at_4"] is not None]
         judge_rows=[r for r in rows if r["judge"]]
+        latency_values=[r["latency_ms"] for r in rows if r["latency_ms"] is not None]
         arms[f"{key[0]}:{key[1]}"]={
             "n":len(rows),"answered":sum(x["answered"] for x in rows),
             "abstained_or_missing":sum(not x["answered"] for x in rows),
             "paper_recall_at_4":mean(r["paper_recall_at_4"] for r in scorable) if scorable else None,
             "chunk_precision_at_4":mean(r["chunk_precision_at_4"] for r in scorable) if scorable else None,
-            "avg_latency_ms":mean(r["latency_ms"] for r in rows
-                                  if r["latency_ms"] is not None) if rows else None,
+            "avg_latency_ms":mean(latency_values) if latency_values else None,
             "avg_gpt_calls":mean(r["gpt_calls"] for r in rows) if rows else None,
             "judge_coverage":len(judge_rows),
             **{"judge_"+m:mean(r["judge"][m] for r in judge_rows)
