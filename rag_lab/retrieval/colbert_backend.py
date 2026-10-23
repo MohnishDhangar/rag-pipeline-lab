@@ -37,6 +37,11 @@ class ColBERTVectorStoreShim:
         self.id_to_text=id_to_text
         self.id_to_metadata=id_to_metadata or {}
         validate_mappings(id_to_text,self.id_to_metadata,require_metadata=require_metadata)
+        self._source_to_ids={}
+        for chunk_id,meta in self.id_to_metadata.items():
+            path=meta.get("source")
+            if path:
+                self._source_to_ids.setdefault(path,[]).append(chunk_id)
         # A verified index must have been encoded by the *same* model used
         # for query vectors. The manifest protects against accidental mismatch.
         from rag_lab.retrieval.colbert_manifest import validate_manifest
@@ -76,12 +81,27 @@ class ColBERTVectorStoreShim:
 
     def similarity_search(self, query: str, k: int=4, **kwargs):
         if k<1: raise ValueError("k must be positive")
-        if kwargs.get("filter") is not None:
-            raise NotImplementedError("Use ColBERT's subset IDs rather than a Chroma-style metadata filter")
-        output=self.retriever.retrieve(queries_embeddings=self._embed_query(query),k=k)
+        filters=kwargs.pop("filter",None)
+        if kwargs:
+            raise ValueError(f"Unsupported ColBERT search options: {sorted(kwargs)}")
+        params={"queries_embeddings":self._embed_query(query),"k":k}
+        allowed=None
+        if filters is not None:
+            if not isinstance(filters,dict) or set(filters)!={"source"} or not isinstance(filters["source"],str):
+                raise ValueError("ColBERT supports only exact source-path filtering")
+            allowed=self._source_to_ids.get(filters["source"],[])
+            if not allowed:
+                return []
+            # PyLate's documented subset argument runs PLAID only against
+            # the permitted indexed chunk IDs, unlike global top-k filtering.
+            params["subset"]=allowed
+        output=self.retriever.retrieve(**params)
         if not isinstance(output,(list,tuple)) or len(output)!=1:
             raise ValueError("PyLate must return one result-list for the single query")
-        return self._results_to_documents(output[0])
+        docs=self._results_to_documents(output[0])
+        if allowed is not None and any(d.metadata["original_id"] not in set(allowed) for d in docs):
+            raise ValueError("PyLate subset filtering returned a document outside its source filter")
+        return docs
 
     def as_retriever(self, search_kwargs=None, search_type="similarity"):
         if search_type!="similarity":

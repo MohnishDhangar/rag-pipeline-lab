@@ -90,12 +90,19 @@ class SourceAwareRetriever:
 
     def _search(self, query, limit, paper=None):
         paths=self._sources_by_paper().get(paper,set()) if paper else set()
-        if paper and paths and hasattr(self._base(),"get"):
+        if paper and paths and (
+            hasattr(self._base(),"get") or hasattr(self._base(),"id_to_metadata")
+        ):
             docs=[]
             for path in sorted(paths):
-                # Chroma where={"source": exact path}; no gold labels.
+                # Chroma uses its exact-source metadata filter; PyLate uses
+                # PLAID's documented subset-of-document-IDs filter.
+                # Neither path uses benchmark gold labels.
                 docs.extend(self.store.similarity_search(query,k=limit,filter={"source":path}))
-            return [d for d in docs if self.registry.resolve(d.metadata.get("source"))==paper][:limit]
+            result=[d for d in docs if self.registry.resolve(d.metadata.get("source"))==paper]
+            # Each source-specific result is ordered by its own retriever.
+            # Different backends' scores must never be mixed for ranking.
+            return result[:limit]
         docs=self.store.similarity_search(query,k=limit)
         if paper:
             docs=[d for d in docs if self.registry.resolve(d.metadata.get("source"))==paper]
@@ -125,7 +132,7 @@ class SourceAwareRetriever:
             if current>=quota: continue
             if retries>=self.max_target_queries:break
             retries+=1
-            query=f"{paper.replace('_',' ')} {question}"
+            query=question  # Filtered to this source; do not pollute it with internal paper-ID tokens.
             docs=self._search(query,self.pool_k,paper=paper)
             docs=[d for d in docs if document_key(d) not in excluded]
             candidates.extend(docs[:max(quota-current,1)])
