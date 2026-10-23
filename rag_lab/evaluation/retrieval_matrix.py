@@ -9,11 +9,11 @@ ColBERT runs locally; Gemini is called only by the dense-query encoder.
 from __future__ import annotations
 import argparse,json,time
 from pathlib import Path
-from rag_lab.evaluation.generate import create_backend
+from rag_lab.retrieval.backend_factory import create_backend
 from rag_lab.evaluation.metrics import score_retrieval
 from rag_lab.knowledge.paper_registry import PaperRegistry
 from rag_lab.retrieval.provenance import ProvenanceStore
-from rag_lab.evaluation.benchmark import read_jsonl
+from rag_lab.evaluation.jsonl_io import read_jsonl
 from rag_lab.utils import append_jsonl
 
 VERSION="backend-retrieval-v1"

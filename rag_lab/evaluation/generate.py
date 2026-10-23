@@ -14,26 +14,8 @@ from rag_lab.retrieval.provenance import ProvenanceStore
 from rag_lab.retrieval.adaptive_store import AdaptiveRetrievalStore
 from rag_lab.retrieval.query_router import classify_question, VERSION as ROUTER_VERSION
 from rag_lab.routing.controller_v2 import VERSION as CONTROLLER_V2_VERSION
+from rag_lab.retrieval.backend_factory import create_backend
 
-def create_backend(name, root, chroma_path=None, chroma_collection=None):
-    if name=="dense":
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-        from langchain_chroma import Chroma
-        from rag_lab.retrieval.chroma_health import require_populated_index
-        path = Path(chroma_path or os.environ.get("RAG_CHROMA_PATH")
-                    or (root/"data"/"chroma_naive_gemini")).expanduser().resolve()
-        collection = chroma_collection or os.environ.get("RAG_CHROMA_COLLECTION", "langchain")
-        count = require_populated_index(path, collection)
-        print(f"Using Chroma: {path}, collection={collection}, chunks={count}")
-        embeddings=GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-        return Chroma(embedding_function=embeddings,
-                      persist_directory=str(path), collection_name=collection)
-    from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
-    with (root/"data"/"id_to_text.json").open() as f: mapping=json.load(f)
-    metadata_path=root/"data"/"id_to_metadata.json"
-    metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
-    return ColBERTVectorStoreShim(index_folder=str(root/"data"/"colbert_index"),
-                                  id_to_text=mapping, id_to_metadata=metadata)
 
 def make_strategy(name, backend, llm, registry=None, *, crag_max_grades=2, crag_pool_k=28):
     from rag_lab.strategies.naive import NaiveStrategy
