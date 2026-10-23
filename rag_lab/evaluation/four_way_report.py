@@ -21,7 +21,7 @@ ARMS=(("dense","naive"),("colbert","naive"),("dense","crag"),("colbert","crag"))
 JUDGE_KEYS=("faithfulness","answer_correctness","answer_relevance","citation_support")
 
 
-def report(generated, judged, eval_set, output):
+def report(generated, judged, eval_set, output, *, expected_ids=None, require_complete=False):
     output=Path(output)
     if output.exists():raise FileExistsError(str(output))
     data=json.loads(Path(eval_set).read_text(encoding="utf-8"))
@@ -57,6 +57,19 @@ def report(generated, judged, eval_set, output):
                  "judge":{m:j[m] for m in JUDGE_KEYS} if j else None}
         by_question[qid][f"{key[0]}:{key[1]}"]=summary
         arm_rows[key].append(summary)
+    # Fail rather than silently publishing an incomplete four-arm experiment.
+    if expected_ids is not None:
+        expected=set(expected_ids)
+        unknown=expected-set(truth)
+        if unknown:
+            raise ValueError(f"Unknown requested benchmark IDs: {sorted(unknown)}")
+        observed=set(by_question)
+        if expected != observed:
+            raise ValueError(f"Expected/observed question IDs differ: "
+                             f"missing={sorted(expected-observed)}, extra={sorted(observed-expected)}")
+    incomplete=[qid for qid,rows in by_question.items() if len(rows)!=len(ARMS)]
+    if require_complete and incomplete:
+        raise ValueError(f"Incomplete four-arm experiment: {sorted(incomplete)}")
     arms={}
     for key in ARMS:
         rows=arm_rows[key]
@@ -100,8 +113,12 @@ def main():
     p.add_argument("--judged",required=True)
     p.add_argument("--eval-set",default="eval/eval_set.json")
     p.add_argument("--output",required=True)
+    p.add_argument("--expected-ids",nargs="+",help="Require this exact question set in the report")
+    p.add_argument("--require-complete",action="store_true",
+                   help="Fail if any observed question is missing a four-way arm")
     a=p.parse_args()
-    result=report(a.generated,a.judged,a.eval_set,a.output)
+    result=report(a.generated,a.judged,a.eval_set,a.output,
+                  expected_ids=a.expected_ids,require_complete=a.require_complete)
     print(json.dumps({"arms":result["arms"],"all_four_arms_count":
                       result["all_four_arms_count"]},indent=2))
 
