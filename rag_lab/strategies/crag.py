@@ -1,3 +1,4 @@
+from rag_lab.core.trace import TraceableStrategy
 """
 CRAG -- Corrective Retrieval Augmented Generation.
 
@@ -171,7 +172,7 @@ def default_web_search(query: str, max_results: int = 4) -> List[Document]:
 # CRAGStrategy
 # ---------------------------------------------------------------------------
 
-class CRAGStrategy:
+class CRAGStrategy(TraceableStrategy):
     def __init__(
         self,
         vectorstore,
@@ -236,6 +237,7 @@ class CRAGStrategy:
                  "web_search_query": None, "web_results": [], "answer": None}
 
         docs = self.retriever.invoke(query)
+        self.last_contexts = docs
         grades = [self._grade_document(query, d) for d in docs]
         for doc, g in zip(docs, grades):
             trace["grades"].append({

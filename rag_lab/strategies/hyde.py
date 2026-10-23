@@ -1,3 +1,4 @@
+from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -16,7 +17,7 @@ HYDE_PROMPT = ChatPromptTemplate.from_template(
 )
 
 
-class HydeStrategy:
+class HydeStrategy(TraceableStrategy):
     def __init__(self, vectorstore: VectorStore, llm: BaseChatModel, k: int = 4):
         self.vectorstore = vectorstore
         self.llm = llm
@@ -40,6 +41,7 @@ class HydeStrategy:
         
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
+        self.last_contexts = docs
         context = "\n\n".join(d.page_content for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

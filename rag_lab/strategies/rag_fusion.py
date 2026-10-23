@@ -1,3 +1,4 @@
+from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -24,7 +25,7 @@ def reciprocal_rank_fusion(
     return [doc_lookup[key] for key in reranked_keys]
 
 
-class RagFusionStrategy:
+class RagFusionStrategy(TraceableStrategy):
     def __init__(self, vectorstore: VectorStore, llm: BaseChatModel, k: int = 4, rrf_k: int = 60):
         self.retriever = vectorstore.as_retriever(search_kwargs={"k": k})
         self.llm = llm
@@ -45,6 +46,7 @@ class RagFusionStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
+        self.last_contexts = docs
         context = "\n\n".join(d.page_content for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

@@ -1,3 +1,4 @@
+from rag_lab.core.trace import TraceableStrategy
 # rag_lab/strategies/multi_query.py
 from typing import List
 from langchain_core.prompts import ChatPromptTemplate
@@ -21,7 +22,7 @@ MULTI_QUERY_PROMPT = ChatPromptTemplate.from_template(
 )
 
 
-class MultiQueryStrategy:
+class MultiQueryStrategy(TraceableStrategy):
     def __init__(self, vectorstore: VectorStore, llm: BaseChatModel, k: int = 4):
         self.retriever = vectorstore.as_retriever(search_kwargs={"k": k})
         self.llm = llm
@@ -51,6 +52,7 @@ class MultiQueryStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
+        self.last_contexts = docs
         context = "\n\n".join(d.page_content for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

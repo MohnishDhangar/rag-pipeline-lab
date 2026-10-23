@@ -1,3 +1,4 @@
+from rag_lab.core.trace import TraceableStrategy
 """
 ColBERTStrategy — wraps ColBERTVectorStoreShim behind the same
 .retrieve()/.run() interface every other strategy in rag_lab.strategies
@@ -28,7 +29,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
 
 
-class ColBERTStrategy:
+class ColBERTStrategy(TraceableStrategy):
     """Naive RAG (single retrieval, no query translation) using the
     ColBERT/PyLate backend instead of dense Chroma retrieval."""
 
@@ -51,6 +52,7 @@ class ColBERTStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
+        self.last_contexts = docs
         context = "\n\n".join(d.page_content for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})
