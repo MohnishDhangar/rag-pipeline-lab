@@ -151,3 +151,83 @@ export does not generate a manifest for a pre-existing index, because it
 cannot prove which embeddings PLAID stored. A missing manifest thus reports
 `unverified_no_manifest`, not `matched`; only the current builder writes a
 manifest after successfully indexing.
+
+
+## Phase 4: controlled three-question CRAG answer-quality pilot (2026-10)
+
+Historical 63-question Dense/ColBERT retrieval results were inspected. The next
+experiment explicitly targets three distinct diagnostic cases:
+
+- \`b1_gns_03\`: Dense retrieved the wrong scientific paper; ColBERT recovered GNS.
+- \`b1_cross_01\`: two explicitly identified papers with different training analyses.
+- \`b2_cross_003\`: two explicitly identified papers with technical derivative
+  implementations; ColBERT recovered both papers where Dense missed one.
+
+Do not substitute \`b2_cross_004\` as a positive comparison case without
+reformulating its ambiguous "this batch" reference. CRAG should abstain on
+unresolved external context. Keep original benchmark questions unchanged for
+this experiment, and do not leak gold \`source_documents\` to runtime retrieval.
+
+### Local Fish shell
+
+~~~fish
+cd ~/Codes/rag-lab
+git pull --ff-only origin feature/adaptive-rag-gpt-oauth
+set PY "$HOME/my-jupyter-env/bin/python"
+
+# PyLate already works in this interpreter. Install the RAG/GPT dependencies,
+# not the optional ColBERT extra or a new PyLate index.
+"$PY" -m pip install -e ".[rag,dev]"
+"$PY" -m pip check
+
+# Set GOOGLE_API_KEY/GEMINI_API_KEY and RAG_GPT_MODEL in this Fish session.
+# Never paste tokens into logs or a GitHub issue.
+"$PY" -m rag_lab.llms.cli models
+"$PY" -m rag_lab.evaluation.crag_preflight --root .
+~~~
+
+The preflight checks local populated Chroma, existing ColBERT mappings, PyJWT,
+PyLate, question IDs, environment-variable presence, and the presence of GPT
+model selection. It neither loads PLAID weights nor requests an access token.
+
+~~~fish
+# Run the four arms over the identical three questions (12 records).
+"$PY" -m rag_lab.evaluation.generate \
+  --strategies naive crag --backends dense colbert \
+  --ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --crag-max-grades 2 --crag-pool-k 28 \
+  --output eval/generated_crag_v3_pilot.jsonl
+
+# Judge ONLY answered rows, keeping abstentions in the generation data.
+"$PY" -m rag_lab.evaluation.benchmark judge \
+  --input eval/generated_crag_v3_pilot.jsonl \
+  --output eval/judged_crag_v3_pilot.jsonl
+
+# Fail if any expected question or four-arm record is missing.
+"$PY" -m rag_lab.evaluation.four_way_report \
+  --generated eval/generated_crag_v3_pilot.jsonl \
+  --judged eval/judged_crag_v3_pilot.jsonl \
+  --expected-ids b1_gns_03 b1_cross_01 b2_cross_003 \
+  --require-complete \
+  --output eval/four_way_crag_v3_summary.json
+~~~
+
+A complete run has exactly twelve distinct \`(backend, strategy, question ID)\`
+records even if some answers are abstentions. This requires up to 12 final
+answer GPT requests and 12 additional batch grading requests (CRAG only);
+the judging stage can require at most 12 GPT requests. If the GPT provider
+fails, checkpoints preserve completed runs; rerun with identical configuration.
+The output filename is new because the corrective implementation has changed.
+
+To inspect the status/abstention distribution without any model requests:
+
+~~~fish
+"$PY" -c 'import json,collections; p="eval/generated_crag_v3_pilot.jsonl"; a=[json.loads(x) for x in open(p) if x.strip()]; print("rows",len(a)); print(collections.Counter((r["backend"],r["strategy"],r.get("generation_status")) for r in a))'
+~~~
+
+**Important limitations.** The historical questions influenced development
+and are not held-out evidence. GPT judging should be corroborated by human
+passage review. Source diversity is insufficient to establish passage-level
+support. The 576-chunk legacy ColBERT index was successfully checked by a
+live retrieval query but retains \`unverified_no_manifest\` until reindexed:
+do not create an unearned fingerprint manifest for the old PLAID index.
