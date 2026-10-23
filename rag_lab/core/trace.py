@@ -19,7 +19,7 @@ def source_record(document):
     meta = dict(getattr(document,"metadata",{}) or {})
     text = getattr(document,"page_content","")
     return {
-        "id": str(meta.get("id") or hashlib.sha256(text.encode()).hexdigest()[:16]),
+        "id": str(meta.get("id") or (str(meta["source"]).split("/")[-1].split("\\")[-1] if meta.get("source") else hashlib.sha256(text.encode()).hexdigest()[:16])),
         "paper_id": meta.get("paper_id") or meta.get("short_id"),
         "source": meta.get("source"),
         "page": meta.get("page"),

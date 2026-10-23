@@ -1,3 +1,4 @@
+from rag_lab.knowledge.citations import format_context
 from rag_lab.core.trace import TraceableStrategy
 """
 Decomposition retrieval strategy.
@@ -98,7 +99,7 @@ class DecompositionStrategy(TraceableStrategy):
         for sub_q in sub_questions:
             docs = self.retriever.invoke(sub_q)
             self.last_contexts.extend(docs)
-            context = "\n\n".join(d.page_content for d in docs)
+            context = "\n\n".join(format_context(d) for d in docs)
             formatted_history = (
                 self._format_qa_pairs(qa_pairs) if qa_pairs else "No prior context."
             )

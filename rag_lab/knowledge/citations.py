@@ -1,18 +1,18 @@
-"""Citation provenance and evidence checks, without extra GPT calls."""
+"""Pass-through source labels and deterministic citation ID validation."""
 import re
-from pathlib import Path
+from rag_lab.core.trace import source_record
 
 def format_context(doc):
-    meta=getattr(doc,"metadata",{}) or {}
-    ref=meta.get("id") or Path(str(meta.get("source","unknown"))).name
-    page=meta.get("page")
-    locator=str(ref)+(":page"+str(page) if page is not None else "")
+    source=source_record(doc)
+    ident=source["id"]
+    page=source["page"]
+    locator=ident+(":page"+str(page) if page is not None else "")
     return "[SOURCE "+locator+"]\n"+getattr(doc,"page_content","")
 
 def citation_coverage(answer, sources):
-    """Lexical citation-ID validity, not semantic faithfulness."""
-    allowed=set(str(s.get("id")) for s in sources if s.get("id"))
-    citations=re.findall(r"\[SOURCE\s+([^\]]+)\]",answer)
-    matched=sum(c.split(":page")[0] in allowed for c in citations)
-    return {"citations":len(citations),"valid_citations":matched,
-            "validity":matched/len(citations) if citations else None}
+    """ID validity only; semantic faithfulness needs further evaluation."""
+    allowed={str(s.get("id")) for s in sources if s.get("id")}
+    found=re.findall(r"\[SOURCE\s+([^\]]+)\]",answer)
+    valid=sum(c.split(":page")[0] in allowed for c in found)
+    return {"citations":len(found),"valid_citations":valid,
+            "validity":valid/len(found) if found else None}

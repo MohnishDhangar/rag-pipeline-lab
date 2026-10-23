@@ -1,3 +1,4 @@
+from rag_lab.knowledge.citations import format_context
 from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
@@ -24,7 +25,7 @@ class HydeStrategy(TraceableStrategy):
         self.k = k
         self.hyde_chain = HYDE_PROMPT | llm | StrOutputParser()
         self.answer_prompt = ChatPromptTemplate.from_template(
-            "Answer the question based only on the following context:\n"
+            "Answer only from the context. Cite supporting passages using their exact [SOURCE ...] labels and never invent citations. Context:\n"
             "{context}\n\nQuestion: {question}"
         )
 
@@ -42,6 +43,6 @@ class HydeStrategy(TraceableStrategy):
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
         self.last_contexts = docs
-        context = "\n\n".join(d.page_content for d in docs)
+        context = "\n\n".join(format_context(d) for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

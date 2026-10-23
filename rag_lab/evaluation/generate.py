@@ -35,7 +35,11 @@ def make_strategy(name, backend, llm):
     return registry[name](backend,llm=llm)
 
 def generate(root, results, strategies, backends, model=None, limit=None):
-    questions=json.loads((root/"eval"/"eval_set.json").read_text())["questions"]
+    dataset=json.loads((root/"eval"/"eval_set.json").read_text())
+    questions=dataset["questions"]
+    from pathlib import Path as _Path
+    file_ids={_Path(p["file"]).name.lower():p["short_id"]
+              for p in dataset["metadata"]["papers"] if p.get("file")}
     if limit is not None: questions=questions[:limit]
     done={(r.get("strategy"),r.get("backend"),r.get("id"))
           for r in read_jsonl(results) if r.get("answer")}
@@ -50,6 +54,11 @@ def generate(root, results, strategies, backends, model=None, limit=None):
                 if key in done: continue
                 try:
                     result=strategy.run_with_trace(q["question"])
+                    # Enrich source provenance using corpus file names, never question labels.
+                    for source in result.sources:
+                        if not source.get("paper_id") and source.get("source"):
+                            name=_Path(str(source["source"])).name.lower()
+                            source["paper_id"]=file_ids.get(name)
                     row={**result.to_dict(), "id":q["id"],
                          "strategy":name,"backend":backend_name,
                          "question_type":q.get("question_type"),

@@ -1,3 +1,4 @@
+from rag_lab.knowledge.citations import format_context
 from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
@@ -30,7 +31,7 @@ class RaptorStrategy(TraceableStrategy):
         docs = self.retrieve(query)
         self.last_contexts = docs
         context = "\n\n".join(
-            f"[Level {d.metadata.get('level', '?')}] {d.page_content}"
+            f"[Level {d.metadata.get('level', '?')}] {format_context(d)}"
             for d in docs
         )
         chain = self.answer_prompt | self.llm | StrOutputParser()

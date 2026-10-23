@@ -1,3 +1,4 @@
+from rag_lab.knowledge.citations import format_context
 from rag_lab.core.trace import TraceableStrategy
 """
 Step-back retrieval strategy.
@@ -110,8 +111,8 @@ class StepBackStrategy(TraceableStrategy):
         normal_docs = call_with_backoff(lambda: self.retriever.invoke(query))
         step_back_docs = call_with_backoff(lambda: self.retriever.invoke(step_back_query))
         self.last_contexts = normal_docs + step_back_docs
-        normal_context = "\n\n".join(d.page_content for d in normal_docs)
-        step_back_context = "\n\n".join(d.page_content for d in step_back_docs)
+        normal_context = "\n\n".join(format_context(d) for d in normal_docs)
+        step_back_context = "\n\n".join(format_context(d) for d in step_back_docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({
             "normal_context": normal_context,

@@ -1,3 +1,4 @@
+from rag_lab.knowledge.citations import format_context
 from rag_lab.core.trace import TraceableStrategy
 """
 CRAG -- Corrective Retrieval Augmented Generation.
@@ -117,7 +118,7 @@ Question: {question}"""
 )
 
 ANSWER_PROMPT = ChatPromptTemplate.from_template(
-    """Answer the question based only on the following context:
+    """Answer only from the context. Cite supporting passages using their exact [SOURCE ...] labels and never invent citations. Context:
 {context}
 
 Question: {question}"""
