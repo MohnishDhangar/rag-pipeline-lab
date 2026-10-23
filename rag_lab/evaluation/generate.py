@@ -36,6 +36,13 @@ def make_strategy(name, backend, llm, registry=None, *, crag_max_grades=2, crag_
     return registry[name](backend,llm=llm)
 
 def usable_generation(row):
+    # An explicitly recorded CRAG abstention is a valid experimental outcome,
+    # not a generation failure. It MUST remain counted on resumed runs.
+    if row.get("generation_status") == "abstained":
+        trace=(row.get("trace") or {}).get("crag") or {}
+        return (row.get("strategy") == "crag"
+                and trace.get("action") == "abstain"
+                and row.get("answer") == "Insufficient retrieved evidence to answer this question.")
     return bool(row.get("answer") and row.get("contexts")
                 and row.get("answer") != "Insufficient retrieved evidence to answer this question.")
 
@@ -65,7 +72,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
         json.dumps(row.get("retrieval_config"), sort_keys=True)
         if name in ("adaptive","crag","adaptive_v2") else None
     )
-    crag_config={"version":"closed-corpus-crag-v2",
+    crag_config={"version":"closed-corpus-crag-v3",
                  "max_grades":crag_max_grades,"pool_k":crag_pool_k}
     controller_config={"version":CONTROLLER_V2_VERSION,
                        "max_grader_calls":controller_grader_budget,
@@ -128,7 +135,13 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                     result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning).run_with_trace(
                         q["question"],cross_document=predicted.question_type=="cross_document"
                     )
-                    if not result.contexts:
+                    # Deliberate CRAG abstention is part of the experiment.
+                    # Save it, count it, and continue to all remaining arms.
+                    crag_trace=(result.trace or {}).get("crag") or {}
+                    abstained=(name=="crag" and crag_trace.get("action")=="abstain"
+                               and result.answer ==
+                               "Insufficient retrieved evidence to answer this question.")
+                    if not result.contexts and not abstained:
                         print(f"Stopping: {backend_key}/{name}/{q['id']} retrieved no evidence. "
                               "No successful result will be recorded.")
                         return count
@@ -144,6 +157,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                          "source_documents":q.get("source_documents"),
                          "model":model or llm.model_name,
                          "runtime_question_type":predicted.question_type,
+                         "generation_status":"abstained" if abstained else "answered",
                          **({"retrieval_config":config} if config is not None else {})}
                     append_jsonl(results,row)
                     done.add(key)

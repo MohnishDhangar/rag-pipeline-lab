@@ -101,12 +101,21 @@ class SourceAwareRetriever:
             docs=[d for d in docs if self.registry.resolve(d.metadata.get("source"))==paper]
         return docs
 
-    def retrieve(self, question, *, requested=None, initial=None):
+    def retrieve(self, question, *, requested=None, initial=None,
+                 exclude_keys=None, widen=False):
         request=requested or requested_sources(question,self.registry)
-        candidates=list(initial) if initial is not None else self._search(question,self.k)
-        if initial is not None and not candidates and not request.paper_ids:
-            candidates=self._search(question,self.pool_k)
-        by_paper={self.registry.resolve(d.metadata.get("source")) for d in candidates}
+        excluded=set(exclude_keys or ())
+        if initial is None:
+            candidates=self._search(question,self.pool_k if widen else self.k)
+        else:
+            candidates=list(initial)
+            if widen and not candidates:
+                # A genuine corrective step MUST widen its candidate pool.
+                # Returning the same top-k evidence is not a correction.
+                candidates=self._search(question,self.pool_k)
+            elif not candidates and not request.paper_ids:
+                candidates=self._search(question,self.pool_k)
+        candidates=[d for d in candidates if document_key(d) not in excluded]
         target_ids=list(request.paper_ids)
         quota=max(1,self.k//max(1,len(target_ids)))
         # Only explicitly identified papers receive targeted searches.
@@ -118,6 +127,7 @@ class SourceAwareRetriever:
             retries+=1
             query=f"{paper.replace('_',' ')} {question}"
             docs=self._search(query,self.pool_k,paper=paper)
+            docs=[d for d in docs if document_key(d) not in excluded]
             candidates.extend(docs[:max(quota-current,1)])
         # Preserve at least one passage per explicit source if available;
         # fill remaining slots from initial rank order.
@@ -140,4 +150,6 @@ class SourceAwareRetriever:
             "unresolved_scope":request.unresolved_scope,
             "missing_requested_papers":missing,
             "targeted_retrieval_queries":retries,
+            "correction_widened":bool(widen),
+            "excluded_previous_passages":len(excluded),
         }

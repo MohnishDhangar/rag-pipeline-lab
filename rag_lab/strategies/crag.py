@@ -20,7 +20,7 @@ from rag_lab.retrieval.source_aware import (
 )
 
 ABSTAIN = "Insufficient retrieved evidence to answer this question."
-CRAG_VERSION = "closed-corpus-crag-v2"
+CRAG_VERSION = "closed-corpus-crag-v3"
 
 
 class PassageAssessment(BaseModel):
@@ -143,7 +143,10 @@ class CRAGStrategy(TraceableStrategy):
         if needs_correction and self.max_grades>=2:
             trace["corrective_retrieval"]=True
             # Retrieve wider candidates, but stay inside the trusted corpus.
-            wider,_=self.source_retriever.retrieve(question,requested=request,initial=[])
+            wider,correction_info=self.source_retriever.retrieve(
+                question,requested=request,initial=[],
+                exclude_keys={document_key(d) for d in docs},widen=True)
+            trace["correction_retrieval"]=correction_info
             candidates=list(accepted)
             seen={document_key(d) for d in candidates}
             for d in wider:
