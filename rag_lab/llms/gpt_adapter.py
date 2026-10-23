@@ -52,10 +52,17 @@ class GPTTransport:
             if not r.ok:
                 raise InferenceError("Inference failed: HTTP %d" % r.status_code, status=r.status_code)
             pieces, finished, usage = [], False, {}
-            for line in r.iter_lines(decode_unicode=True):
-                if not line or not line.startswith("data: "): continue
-                if line[6:] == "[DONE]": continue
-                event = json.loads(line[6:])
+            # requests.iter_lines(decode_unicode=True) can yield bytes if the
+            # server's Content-Type omits a charset. SSE data is UTF-8.
+            for line in r.iter_lines(decode_unicode=False):
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].lstrip()
+                if data == "[DONE]":
+                    continue
+                event = json.loads(data)
                 typ = event.get("type")
                 if typ == "response.output_text.delta":
                     pieces.append(event.get("delta",""))
