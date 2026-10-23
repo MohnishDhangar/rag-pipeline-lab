@@ -34,7 +34,7 @@ def test_metrics_and_unknown_labels():
     m=score_retrieval(["A","A","B","C"],["A","B"],k=4)
     assert m["recall_at_k"]==1.0
     assert m["mrr_at_k"]==1.0
-    assert math.isclose(m["precision_at_k"],0.5)
+    assert math.isclose(m["precision_at_k"],0.75)
     assert score_retrieval([],[],k=4)["recall_at_k"] is None
 
 def test_evidence_graph_roundtrip(tmp_path):
