@@ -3,20 +3,26 @@
 Requires already-built local Chroma and/or PyLate indexes, and GOOGLE_API_KEY
 for Gemini query embeddings. Run after ChatGPT OAuth login and models selection.
 """
-import argparse, json
+import argparse, json, os
 from pathlib import Path
 
 from rag_lab.llms.gpt_adapter import build_chat_model, InferenceError
 from rag_lab.utils import append_jsonl
 from rag_lab.evaluation.benchmark import read_jsonl
 
-def create_backend(name, root):
+def create_backend(name, root, chroma_path=None, chroma_collection=None):
     if name=="dense":
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
         from langchain_chroma import Chroma
+        from rag_lab.retrieval.chroma_health import require_populated_index
+        path = Path(chroma_path or os.environ.get("RAG_CHROMA_PATH")
+                    or (root/"data"/"chroma_naive_gemini")).expanduser().resolve()
+        collection = chroma_collection or os.environ.get("RAG_CHROMA_COLLECTION", "langchain")
+        count = require_populated_index(path, collection)
+        print(f"Using Chroma: {path}, collection={collection}, chunks={count}")
         embeddings=GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
         return Chroma(embedding_function=embeddings,
-                      persist_directory=str(root/"data"/"chroma_naive_gemini"))
+                      persist_directory=str(path), collection_name=collection)
     from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
     with (root/"data"/"id_to_text.json").open() as f: mapping=json.load(f)
     metadata_path=root/"data"/"id_to_metadata.json"
@@ -36,7 +42,13 @@ def make_strategy(name, backend, llm):
                   step_back=StepBackStrategy,decomposition=DecompositionStrategy)
     return registry[name](backend,llm=llm)
 
-def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None, verify_on_warning=False):
+def usable_generation(row):
+    return bool(row.get("answer") and row.get("contexts")
+                and row.get("answer") != "Insufficient retrieved evidence to answer this question.")
+
+
+def generate(root, results, strategies, backends, model=None, limit=None, graph_path=None,
+             verify_on_warning=False, chroma_path=None, chroma_collection=None):
     dataset=json.loads((root/"eval"/"eval_set.json").read_text())
     questions=dataset["questions"]
     from pathlib import Path as _Path
@@ -44,11 +56,11 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
               for p in dataset["metadata"]["papers"] if p.get("file")}
     if limit is not None: questions=questions[:limit]
     done={(r.get("strategy"),r.get("backend"),r.get("id"))
-          for r in read_jsonl(results) if r.get("answer")}
+          for r in read_jsonl(results) if usable_generation(r)}
     llm=build_chat_model(model=model)
     count=0
     for backend_name in backends:
-        store=create_backend(backend_name,root)
+        store=create_backend(backend_name,root,chroma_path,chroma_collection)
         if graph_path:
             from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
             from rag_lab.knowledge.evidence_graph import EvidenceGraph
@@ -64,11 +76,15 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                     result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning).run_with_trace(
                         q["question"],cross_document=q.get("question_type")=="cross_document"
                     )
+                    if not result.contexts:
+                        print(f"Stopping: {backend_key}/{name}/{q['id']} retrieved no evidence. "
+                              "No successful result will be recorded.")
+                        return count
                     # Enrich source provenance using corpus file names, never question labels.
                     for source in result.sources:
                         if not source.get("paper_id") and source.get("source"):
-                            name=_Path(str(source["source"])).name.lower()
-                            source["paper_id"]=file_ids.get(name)
+                            source_name=_Path(str(source["source"])).name.lower()
+                            source["paper_id"]=file_ids.get(source_name)
                     row={**result.to_dict(), "id":q["id"],
                          "strategy":name,"backend":backend_key,
                          "question_type":q.get("question_type"),
@@ -91,9 +107,11 @@ def main():
     p.add_argument("--strategies",nargs="+",default=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"])
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
     p.add_argument("--limit",type=int)
+    p.add_argument("--chroma-path",type=Path,help="Existing, nonempty Chroma index")
+    p.add_argument("--chroma-collection",help="Collection name (default: langchain)")
     p.add_argument("--graph",type=Path,help="Optional built scientific evidence graph")
     p.add_argument("--verify-on-warning",action="store_true",help="Spend one additional GPT call for uncertain answers")
     a=p.parse_args()
-    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph,a.verify_on_warning))
+    print("Generated:",generate(a.root,a.output,a.strategies,a.backends,a.model,a.limit,a.graph,a.verify_on_warning,a.chroma_path,a.chroma_collection))
 
 if __name__=="__main__": main()
