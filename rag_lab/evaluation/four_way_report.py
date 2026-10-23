@@ -12,8 +12,8 @@ import argparse,json
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean
-from rag_lab.evaluation.benchmark import read_jsonl,row_fingerprint
-from rag_lab.evaluation.judge import RUBRIC_VERSION
+from rag_lab.evaluation.jsonl_io import read_jsonl
+from rag_lab.evaluation.identity import row_fingerprint, RUBRIC_VERSION
 from rag_lab.evaluation.metrics import score_retrieval
 from rag_lab.knowledge.paper_registry import PaperRegistry
 
@@ -74,9 +74,20 @@ def report(generated, judged, eval_set, output):
             **{"judge_"+m:mean(r["judge"][m] for r in judge_rows)
                if judge_rows else None for m in JUDGE_KEYS},
         }
+    complete_ids=[qid for qid,arms_for_q in by_question.items()
+                  if len(arms_for_q)==len(ARMS)]
     result={"purpose":"exploratory_4way_no_independent_human_validation",
             "arms":arms,"per_question":by_question,
-            "all_four_arms_count":sum(len(v)==4 for v in by_question.values())}
+            "all_four_arms_count":len(complete_ids),
+            "total_questions_observed":len(by_question),
+            "incomplete_question_ids":[qid for qid in sorted(by_question)
+                                       if qid not in complete_ids],
+            "all_four_arms_judged_count":sum(
+                len(arms_for_q)==len(ARMS) and all(
+                    row["judge"] is not None or not row["answered"]
+                    for row in arms_for_q.values())
+                for arms_for_q in by_question.values()),
+            "limitations":"Scores are GPT-judged on answered rows; abstentions must remain in denominator."}
     with output.open("x",encoding="utf-8") as f:
         json.dump(result,f,ensure_ascii=False,indent=2)
         f.write("\n")

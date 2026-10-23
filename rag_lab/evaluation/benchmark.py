@@ -8,7 +8,8 @@ from pathlib import Path
 
 from rag_lab.evaluation.metrics import score_retrieval
 from rag_lab.knowledge.paper_registry import PaperRegistry
-from rag_lab.evaluation.judge import evaluate_row, RUBRIC_VERSION
+from rag_lab.evaluation.judge import evaluate_row
+from rag_lab.evaluation.identity import row_fingerprint, RUBRIC_VERSION
 from rag_lab.utils import append_jsonl
 from rag_lab.llms.gpt_adapter import InferenceError
 
@@ -23,14 +24,6 @@ def read_jsonl(path):
 
 RETRIEVAL_VERSION = "retrieval-metrics-v2"
 
-
-def row_fingerprint(row):
-    """Change-aware identity prevents stale scores when an answer/context changes."""
-    content={k:row.get(k) for k in ("id","strategy","backend","question",
-                                     "answer","contexts","sources","ground_truth",
-                                     "source_documents","model")}
-    data=json.dumps(content,ensure_ascii=False,sort_keys=True)
-    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def benchmark(input_path, output_path, mode, registry=None):
