@@ -1,23 +1,32 @@
-# Jupyter Notebooks checkpoints
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
-
-# Python cache
+# Python / Jupyter
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Environments and credentials
-.env
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+.pytest_cache/
+.coverage
+*.egg-info/
+.venv/
 venv/
 env/
-.venv/
 
-# OS-specific files
-.DS_Store
-Thumbs.db
+# Credentials
+.env
+.env.*
+*.pem
+*.key
+.credentials*
+.oauth*
+.streamlit/secrets.toml
 
-# Large local data / evaluation result dumps
+# Large private corpora, derived indexes, and benchmark artifacts
 data/
 eval/eval_results.jsonl
 eval/ragas_scores.jsonl
+eval/generated_gpt*.jsonl
+eval/gpt_judge_scores.jsonl
+eval/retrieval_metrics.jsonl
+*.joblib
+
+.DS_Store
+Thumbs.db
