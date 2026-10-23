@@ -54,7 +54,7 @@ def test_unverified_quote_is_retried_and_accepted_after_exact_copy():
     assert out.trace["crag"]["action"]=="corrected"
     assert len(rounds)==2
     assert out.trace["crag"]["retrying_unverified_quotes"]==1
-    assert out.trace["crag"]["corrective_retrieval"]["selection_limit"]==8
+    assert out.trace["crag"]["correction_retrieval"]["selection_limit"]==8
     assert any(g["quote_verified"] for g in out.trace["crag"]["corrective_grades"])
     assert out.sources[0]["paper_id"]=="gns"
 
