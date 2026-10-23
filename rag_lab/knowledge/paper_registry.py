@@ -9,6 +9,12 @@ from pathlib import Path
 ALIASES = {
     "ntk_pinn": ["When and Why PINNs fail to train: A Neural Network Perspective.pdf"],
     "sk_pinn": ["SK-PINN_ Accelerated physics-informed deep learning by smoothing kernel gradients.pdf"],
+    # Verified against stored Chroma metadata (line breaks are normalized by file_key).
+    "xpinn": [
+        "XPINNs - A Generalized Space-Time Domain Decomposition "
+        "Based Deep Learning Framework for Nonlinear "
+        "Partial Differential Equations.pdf"
+    ],
 }
 
 
