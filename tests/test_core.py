@@ -27,7 +27,7 @@ def test_trace_is_from_generation_not_second_retrieval():
 def test_citations():
     d=Doc("Text",id="x",page=9)
     assert "[SOURCE x:pdfpage10]" in format_context(d)
-    assert citation_coverage("Claim [SOURCE x:pdfpage10]",[{"id":"x"}])["validity"]==1.0
+    assert citation_coverage("Claim [SOURCE x:pdfpage10]",[{"id":"x","page":9,"pdf_page_number":10}])["validity"]==1.0
     assert citation_coverage("Claim [SOURCE wrong]",[{"id":"x"}])["validity"]==0.0
 
 def test_metrics_and_unknown_labels():
