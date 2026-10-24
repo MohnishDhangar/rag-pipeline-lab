@@ -501,13 +501,13 @@ outputs; changes invalidate the preregistration.
 ~~~
 
 For 12 questions, expect **48 generation records**, plus judge records for
-answered rows. The four-arm generation has up to 72 GPT requests:
-24 naive answers + 24 CRAG final answers + 24 CRAG batch grades; with two
-grades, CRAG alone may need up to 48 grading requests instead, so the true
-upper bound is **96 generation calls** (24 naive + 24 CRAG answer + 48
-CRAG grading) and **48 judge calls**. Fewer if CRAG abstains. Choose an
-appropriate smaller **exploratory, non-held-out** batch first if required by
-budget and re-freeze a NEW independent final split for confirmation.
+answered rows. At maximum two CRAG grading rounds per question, the upper bound is
+**96 generation-stage GPT calls** (24 naive answers + 24 CRAG answers +
+48 CRAG batch grading calls), plus **up to 48 GPT judge calls**.
+Fewer requests are needed when CRAG abstains or short-circuits after
+one grading attempt. If cost or available requests are limiting,
+pilot on a separate exploratory set rather than repeatedly inspecting
+the frozen held-out answers.
 
 The report's GPT judge scores alone are NOT independent human validation.
 Human-review at least the incorrect-source answers, both-paper coverage,
