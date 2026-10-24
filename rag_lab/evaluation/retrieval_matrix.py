@@ -20,9 +20,10 @@ VERSION="backend-retrieval-v1"
 
 
 def benchmark(root, output, *, backends=("dense","colbert"), k=4, limit=None,
-              ids=None, chroma_path=None, chroma_collection=None):
+              ids=None, chroma_path=None, chroma_collection=None, eval_set=None):
     root=Path(root)
-    dataset=json.loads((root/"eval"/"eval_set.json").read_text())
+    eval_path=Path(eval_set) if eval_set is not None else root/"eval"/"eval_set.json"
+    dataset=json.loads(eval_path.read_text(encoding="utf-8"))
     questions=dataset["questions"]
     if ids is not None:
         wanted=set(ids)
@@ -69,6 +70,8 @@ def benchmark(root, output, *, backends=("dense","colbert"), k=4, limit=None,
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--root",type=Path,default=Path("."))
+    p.add_argument("--eval-set",type=Path,
+                   help="JSON evaluation split; default eval/eval_set.json")
     p.add_argument("--output",type=Path,default=Path("eval/retrieval_backends_v1.jsonl"))
     p.add_argument("--backends",nargs="+",choices=["dense","colbert"],
                    default=["dense","colbert"])
@@ -82,7 +85,7 @@ def main():
     print("New backend retrieval experiments:",
           benchmark(a.root,a.output,backends=a.backends,k=a.k,limit=a.limit,
                     ids=a.ids,chroma_path=a.chroma_path,
-                    chroma_collection=a.chroma_collection))
+                    chroma_collection=a.chroma_collection,eval_set=a.eval_set))
 
 
 if __name__=="__main__":main()

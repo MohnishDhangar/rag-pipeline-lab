@@ -51,12 +51,13 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
              verify_on_warning=False, chroma_path=None, chroma_collection=None,
              adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5, ids=None,
              crag_max_grades=2, crag_pool_k=28, controller_grader_budget=1,
-             controller_require_colbert=False):
+             controller_require_colbert=False, eval_set=None):
     if "adaptive_v2" in strategies and (list(backends)!=["dense"] or graph_path):
         raise ValueError("adaptive_v2 runs once under --backends dense without graph")
     if crag_max_grades not in (1,2) or controller_grader_budget not in (0,1,2):
         raise ValueError("CRAG grades must be 1-2; controller budget must be 0-2")
-    dataset=json.loads((root/"eval"/"eval_set.json").read_text())
+    eval_path=Path(eval_set) if eval_set is not None else root/"eval"/"eval_set.json"
+    dataset=json.loads(eval_path.read_text(encoding="utf-8"))
     questions=dataset["questions"]
     registry = PaperRegistry.from_eval(dataset)
     if ids is not None:
@@ -171,6 +172,8 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--root",type=Path,default=Path("."))
     p.add_argument("--output",type=Path,default=Path("eval/generated_gpt.jsonl"))
+    p.add_argument("--eval-set",type=Path,default=None,
+                   help="JSON evaluation split; default eval/eval_set.json")
     p.add_argument("--model")
     p.add_argument("--strategies",nargs="+",default=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"])
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
@@ -195,6 +198,7 @@ def main():
                                 a.verify_on_warning,a.chroma_path,a.chroma_collection,
                                 a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda,a.ids,
                                 a.crag_max_grades,a.crag_pool_k,
-                                a.controller_grader_budget,a.controller_require_colbert))
+                                a.controller_grader_budget,a.controller_require_colbert,
+                                a.eval_set))
 
 if __name__=="__main__": main()
