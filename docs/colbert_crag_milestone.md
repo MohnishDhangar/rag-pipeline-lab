@@ -408,3 +408,109 @@ failed to copy an exact quote. A useful *research* threshold is reliable
 completeness and accuracy on **new**, independently labelled and
 human-reviewed examples. Passing the engineering threshold does not
 establish generalization or prove that CRAG outperforms naive retrieval.
+
+
+## Phase 5 — independent evaluation protocol, after v5 pilot
+
+CRAG v5 development results on the same three repeatedly studied questions:
+
+| Configuration | Answered | Mean GPT-judged correctness (answered) | Mean latency |
+| --- | ---: | ---: | ---: |
+| Dense + naive | 3/3 | 0.567 | 9.28 s |
+| ColBERT + naive | 3/3 | 0.607 | 6.06 s |
+| Dense + CRAG v5 | 2/3 | 0.530 | 30.42 s |
+| ColBERT + CRAG v5 | 3/3 | 0.693 | 29.98 s |
+
+**These are development-set scores and should not be used as evidence of
+generalization.** The dense CRAG GNS response used a MeshGraphNets passage to
+answer a GNS-specific question, scored just 0.30 correctness, yet its
+citation-support score was 1.00. A citation can be syntactically and
+contextually valid while citing the WRONG research work. Multi-paper answers
+still omit key scientific mechanisms, despite full source coverage.
+
+The default for new experiments is therefore unchanged. Retain all four arms
+until a new, human-verified question set shows a benefit that justifies
+CRAG's higher latency and extra GPT grading calls.
+
+### Build a new, pre-registered held-out evaluation split
+
+Do NOT re-label the existing 63 benchmark questions as held-out. Those
+questions and their paper annotations already informed algorithm development.
+
+Create a new file containing **at least 12 independently authored,
+human-verified** questions, including a useful spread across single-paper,
+cross-paper, numerical, derivation, ablation, and failure-analysis tasks.
+The following code creates a blank template retaining the SAME 11-paper
+canonical registry as your Chroma/ColBERT indexes:
+
+~~~fish
+cd ~/Codes/rag-lab
+git pull --ff-only origin feature/adaptive-rag-gpt-oauth
+set PY "$HOME/my-jupyter-env/bin/python"
+
+"$PY" -m rag_lab.evaluation.heldout_validate init \
+  --development eval/eval_set.json \
+  --output eval/heldout_eval_set.json
+~~~
+
+Author NEW entries inside \`questions\`, each with:
+\`id\` (e.g. \`h1_001\`), \`question\`, \`question_type\`
+(\`single_document\` or \`cross_document\`),
+\`source_documents\` (canonical paper IDs, used ONLY by offline scoring)
+and \`ground_truth\` (independently reviewed against the original PDF).
+Mark \`metadata.human_reference_reviewed\` true only when actually reviewed.
+Questions must be standalone: no "this batch" or undefined "the paper."
+
+Before any GPT retrieval or judging, run the validator and RECORD its
+\`canonical_sha256\`. It checks ID disjointness, exact/near-duplicate
+development questions, schema, paper IDs, source cardinality and unspecified
+context. It does NOT establish independent authorship or truth accuracy.
+
+~~~fish
+"$PY" -m rag_lab.evaluation.heldout_validate check \
+  --development eval/eval_set.json \
+  --candidate eval/heldout_eval_set.json \
+  --minimum 12
+
+sha256sum eval/heldout_eval_set.json
+~~~
+
+Do not edit the held-out questions or reference answers after seeing model
+outputs; changes invalidate the preregistration.
+
+### Run full matched four-way trial ONCE on the new split
+
+~~~fish
+"$PY" -m rag_lab.evaluation.generate \
+  --eval-set eval/heldout_eval_set.json \
+  --strategies naive crag --backends dense colbert \
+  --crag-max-grades 2 --crag-pool-k 28 \
+  --output eval/heldout_generated_crag_v5.jsonl
+
+"$PY" -m rag_lab.evaluation.benchmark judge \
+  --eval eval/heldout_eval_set.json \
+  --input eval/heldout_generated_crag_v5.jsonl \
+  --output eval/heldout_judged_crag_v5.jsonl
+
+"$PY" -m rag_lab.evaluation.four_way_report \
+  --eval-set eval/heldout_eval_set.json \
+  --generated eval/heldout_generated_crag_v5.jsonl \
+  --judged eval/heldout_judged_crag_v5.jsonl \
+  --require-complete --require-judged \
+  --output eval/heldout_four_way_crag_v5_summary.json
+~~~
+
+For 12 questions, expect **48 generation records**, plus judge records for
+answered rows. The four-arm generation has up to 72 GPT requests:
+24 naive answers + 24 CRAG final answers + 24 CRAG batch grades; with two
+grades, CRAG alone may need up to 48 grading requests instead, so the true
+upper bound is **96 generation calls** (24 naive + 24 CRAG answer + 48
+CRAG grading) and **48 judge calls**. Fewer if CRAG abstains. Choose an
+appropriate smaller **exploratory, non-held-out** batch first if required by
+budget and re-freeze a NEW independent final split for confirmation.
+
+The report's GPT judge scores alone are NOT independent human validation.
+Human-review at least the incorrect-source answers, both-paper coverage,
+the exactness of evidence, scientific adequacy and the abstention decisions.
+Report answer rate, source recall, scientific correctness, abstention-adjusted
+quality, p50/p95 latency, and actual per-arm model calls.
