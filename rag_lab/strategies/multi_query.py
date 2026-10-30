@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 # rag_lab/strategies/multi_query.py
 from typing import List
 from langchain_core.prompts import ChatPromptTemplate
@@ -21,13 +23,13 @@ MULTI_QUERY_PROMPT = ChatPromptTemplate.from_template(
 )
 
 
-class MultiQueryStrategy:
+class MultiQueryStrategy(TraceableStrategy):
     def __init__(self, vectorstore: VectorStore, llm: BaseChatModel, k: int = 4):
         self.retriever = vectorstore.as_retriever(search_kwargs={"k": k})
         self.llm = llm
         self.query_gen_chain = MULTI_QUERY_PROMPT | llm | LineListOutputParser()
         self.answer_prompt = ChatPromptTemplate.from_template(
-            "Answer the question based only on the following context:\n"
+            "Answer only from the context. Cite supporting passages using their exact [SOURCE ...] labels and never invent citations. Context:\n"
             "{context}\n\nQuestion: {question}"
         )
 
@@ -51,6 +53,7 @@ class MultiQueryStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
-        context = "\n\n".join(d.page_content for d in docs)
+        self.last_contexts = docs
+        context = "\n\n".join(format_context(d) for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})
