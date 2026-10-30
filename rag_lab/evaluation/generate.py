@@ -26,6 +26,9 @@ def make_strategy(name, backend, llm, registry=None, *, crag_max_grades=2, crag_
     from rag_lab.strategies.decomposition import DecompositionStrategy
     from rag_lab.strategies.adaptive import AdaptiveNaiveStrategy
     from rag_lab.strategies.crag import CRAGStrategy
+    if name == "crag_v6":
+        from rag_lab.strategies.crag_v6 import CRAGV6Strategy
+        return CRAGV6Strategy(backend,llm,registry=registry,pool_k=crag_pool_k)
     if name == "crag":
         return CRAGStrategy(backend,llm,registry=registry,
                             max_grades=crag_max_grades,pool_k=crag_pool_k)
@@ -71,10 +74,11 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                        "lambda_mult": adaptive_lambda, "router_version": ROUTER_VERSION}
     config_key = lambda name, row: (
         json.dumps(row.get("retrieval_config"), sort_keys=True)
-        if name in ("adaptive","crag","adaptive_v2") else None
+        if name in ("adaptive","crag","crag_v6","adaptive_v2") else None
     )
     crag_config={"version":"closed-corpus-crag-v5",
                  "max_grades":crag_max_grades,"pool_k":crag_pool_k}
+    crag_v6_config={"version":"evidence-preserving-crag-v6.0","pool_k":crag_pool_k}
     controller_config={"version":CONTROLLER_V2_VERSION,
                        "max_grader_calls":controller_grader_budget,
                        "crag_pool_k":crag_pool_k,
@@ -105,6 +109,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                                            lambda_mult=adaptive_lambda), registry)
             config=(adaptive_config if name=="adaptive"
                     else crag_config if name=="crag"
+                    else crag_v6_config if name=="crag_v6"
                     else controller_config if name=="adaptive_v2"
                     else None)
             if name=="adaptive_v2":
