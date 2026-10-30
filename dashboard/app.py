@@ -26,12 +26,14 @@ with tab_live:
     if st.button("Generate answer",disabled=not q.strip()):
         try:
             from rag_lab.evaluation.generate import create_backend, make_strategy
+            from rag_lab.application.serving import serving_store
             from rag_lab.llms.gpt_adapter import build_chat_model
             from rag_lab.routing.adaptive_router import AdaptiveRouter
             import os
             model=os.environ.get("RAG_GPT_MODEL")
             if not model: raise ValueError("Set RAG_GPT_MODEL after OAuth model discovery")
-            store=create_backend(backend,Path("."))
+            raw_store=create_backend(backend,Path("."))
+            store,registry=serving_store(raw_store,registry_path=Path("eval/eval_set.json"))
             if use_graph:
                 from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
                 from rag_lab.knowledge.evidence_graph import EvidenceGraph
@@ -43,14 +45,16 @@ with tab_live:
                 path=Path("data/adaptive_router.joblib")
                 runner=AdaptiveRouter(alternatives,path if path.exists() else None)
             else:
-                runner=make_strategy(strategy,store,llm)
+                runner=make_strategy(strategy,store,llm,registry=registry)
             from rag_lab.core.pipeline import EvidenceAwarePipeline
             result=EvidenceAwarePipeline(runner,verify_on_warning=verify_flag).run_with_trace(
                 q,cross_document=("compare" in q.lower() or "contrast" in q.lower())
             )
             st.session_state["current_result"]=result.to_dict()
         except Exception as exc:
-            st.error(type(exc).__name__+": "+str(exc))
+            st.error("The request failed. Check the local application logs for details.")
+            import logging
+            logging.getLogger(__name__).exception("Local RAG request failed")
     result=st.session_state.get("current_result")
     if result:
         st.subheader("Answer")
