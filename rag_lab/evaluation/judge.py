@@ -5,6 +5,7 @@ Evaluate judge agreement on human-rated held-out examples.
 """
 from __future__ import annotations
 import json
+from pydantic import BaseModel, Field
 from rag_lab.llms.gpt_adapter import parse_object
 from rag_lab.llms.factory import build_transport, judge_selection
 
@@ -19,6 +20,13 @@ citation_support (claims with source citations are supported by their cited
 contexts, score 0 when required citations are absent).
 Include short string 'reason'. Never invent evidence."""
 
+class JudgeScores(BaseModel):
+    faithfulness: float = Field(ge=0, le=1)
+    answer_correctness: float = Field(ge=0, le=1)
+    answer_relevance: float = Field(ge=0, le=1)
+    citation_support: float = Field(ge=0, le=1)
+    reason: str
+
 def evaluate_row(row, transport=None):
     llm = transport or build_transport(*judge_selection())
     content = json.dumps({
@@ -26,7 +34,11 @@ def evaluate_row(row, transport=None):
         "answer":row["answer"],"evidence":row.get("contexts",[]),
         "sources":row.get("sources",[]),
     },ensure_ascii=False)
-    text, usage = llm.generate([{"role":"user","content":content}],instructions=SYSTEM)
+    items=[{"role":"user","content":content}]
+    if hasattr(llm,"generate_structured"):
+        text, usage=llm.generate_structured(items,SYSTEM,JudgeScores)
+    else:
+        text, usage=llm.generate(items,instructions=SYSTEM)
     parsed = parse_object(text)
     keys = ["faithfulness","answer_correctness","answer_relevance","citation_support"]
     for key in keys:

@@ -26,6 +26,12 @@ MODEL_ENV = {"chatgpt_oauth": "RAG_GPT_MODEL", "groq": "RAG_GROQ_MODEL",
 ADAPTER_VERSION = "provider-adapter-v1"
 MAX_OUTPUT_TOKENS = 4096
 
+def output_budget():
+    value = int(os.getenv("RAG_LLM_MAX_OUTPUT_TOKENS", str(MAX_OUTPUT_TOKENS)))
+    if value < 1:
+        raise ValueError("RAG_LLM_MAX_OUTPUT_TOKENS must be positive")
+    return value
+
 def resolve_provider(provider=None):
     selected = provider or os.getenv("RAG_LLM_PROVIDER") or "chatgpt_oauth"
     if selected not in PROVIDERS:
@@ -47,7 +53,7 @@ def resolve_model(provider, model=None):
 def inference_identity(provider, model):
     return {"provider": provider, "model": model,
             "adapter_version": ADAPTER_VERSION,
-            "max_output_tokens": None if provider == "chatgpt_oauth" else MAX_OUTPUT_TOKENS,
+            "max_output_tokens": None if provider == "chatgpt_oauth" else output_budget(),
             "structured_output": "prompt-json" if provider == "chatgpt_oauth" else "provider-json-schema",
             "cache_enabled": bool(os.getenv("RAG_GPT_CACHE" if provider == "chatgpt_oauth" else "RAG_LLM_CACHE"))}
 
@@ -60,6 +66,7 @@ class APITransport:
         if provider not in ("groq", "gemini"):
             raise ValueError("APITransport requires groq or gemini")
         self.provider, self.model = provider, resolve_model(provider, model)
+        self.max_output_tokens = output_budget()
         self.http = http or requests.Session()
         self.api_key = api_key or (os.getenv("GROQ_API_KEY") if provider == "groq"
                                   else os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
@@ -74,7 +81,7 @@ class APITransport:
         if self.provider == "groq":
             messages = ([{"role": "system", "content": instructions}] if instructions else []) + list(items)
             payload = {"model": self.model, "messages": messages, "stream": False,
-                       "max_completion_tokens": MAX_OUTPUT_TOKENS}
+                       "max_completion_tokens": self.max_output_tokens}
             if schema is not None:
                 payload["response_format"] = {"type": "json_schema", "json_schema": {
                     "name": "rag_result", "strict": False, "schema": schema}}
@@ -82,7 +89,7 @@ class APITransport:
                     {"Authorization": "Bearer " + self.api_key}, payload)
         contents = [{"role": "model" if m["role"] == "assistant" else "user",
                      "parts": [{"text": m["content"]}]} for m in items]
-        config = {"maxOutputTokens": MAX_OUTPUT_TOKENS}
+        config = {"maxOutputTokens": self.max_output_tokens}
         if schema is not None:
             config.update(responseMimeType="application/json", responseJsonSchema=schema)
         payload = {"contents": contents, "generationConfig": config}
@@ -117,7 +124,9 @@ class APITransport:
 
     def generate(self, input, instructions=None, *, schema=None):
         url, headers, payload = self._request(input, instructions, schema)
-        key = self.cache.key(self.provider + ":" + self.model, payload) if self.cache else None
+        # Do not cache unvalidated structured output. A schema-invalid response
+        # must never poison subsequent grading retries.
+        key = self.cache.key(self.provider + ":" + self.model, payload) if self.cache and schema is None else None
         if key:
             cached = self.cache.get(key)
             if cached:
@@ -212,3 +221,14 @@ def build_chat_model(model=None, transport=None, *, provider=None):
 def judge_selection(provider=None, model=None):
     chosen = resolve_provider(provider or os.getenv("RAG_JUDGE_PROVIDER"))
     return chosen, resolve_model(chosen, model or os.getenv("RAG_JUDGE_MODEL"))
+
+def usage_snapshot(llm):
+    transport = getattr(llm, "_transport", llm)
+    totals = getattr(transport, "usage_totals", {}) or {}
+    return {"requests": getattr(transport, "calls", 0),
+            "cache_hits": getattr(transport, "cache_hits", 0),
+            **{k: totals.get(k, 0) for k in ("input_tokens", "output_tokens", "total_tokens")}}
+
+def usage_delta(llm, before):
+    after = usage_snapshot(llm)
+    return {k: after[k] - before.get(k, 0) for k in after}

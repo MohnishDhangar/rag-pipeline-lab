@@ -7,7 +7,7 @@ import argparse, json, os
 from pathlib import Path
 
 from rag_lab.llms.gpt_adapter import InferenceError
-from rag_lab.llms.factory import build_chat_model, resolve_provider, inference_identity
+from rag_lab.llms.factory import build_chat_model, resolve_provider, inference_identity, usage_snapshot, usage_delta
 from rag_lab.utils import append_jsonl
 from rag_lab.evaluation.benchmark import read_jsonl
 from rag_lab.knowledge.paper_registry import PaperRegistry
@@ -145,6 +145,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                 try:
                     from rag_lab.core.pipeline import EvidenceAwarePipeline
                     # Do not feed the gold question_type to the runtime pipeline.
+                    before=usage_snapshot(llm)
                     predicted = classify_question(q["question"])
                     result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning,verifier=getattr(llm,'_transport',None)).run_with_trace(
                         q["question"],cross_document=predicted.question_type=="cross_document"
@@ -169,7 +170,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                          "question_type":q.get("question_type"),
                          "ground_truth":q.get("ground_truth"),
                          "source_documents":q.get("source_documents"),
-                         "model":model or llm.model_name,"provider":selected_provider,"inference":identity,
+                         "model":model or llm.model_name,"provider":selected_provider,"inference":identity,"inference_usage":usage_delta(llm,before),
                          "runtime_question_type":predicted.question_type,
                          "generation_status":"abstained" if abstained else "answered",
                          **({"retrieval_config":config} if config is not None else {})}

@@ -18,5 +18,9 @@ def row_fingerprint(row):
         "id","strategy","backend","question",
         "answer","contexts","sources","ground_truth",
         "source_documents","model")}
+    # Keep historical fingerprints identical; new provider-aware rows bind
+    # the actual inference identity to their judge score.
+    if row.get("inference") is not None:
+        content["inference"]=row["inference"]
     data=json.dumps(content,ensure_ascii=False,sort_keys=True)
     return hashlib.sha256(data.encode("utf-8")).hexdigest()

@@ -11,7 +11,7 @@ RAG_LLM_PROVIDER selects a default; --provider overrides it. Model defaults:
 Groq openai/gpt-oss-120b; Gemini RAG_GEMINI_MODEL (explicit); OAuth RAG_GPT_MODEL.
 RAG_JUDGE_PROVIDER and RAG_JUDGE_MODEL independently configure judging.
 RAG_LLM_CACHE is optional, provider-namespaced local SQLite caching for API
-providers; RAG_GPT_CACHE remains the OAuth cache. Keys are never stored in caches
+providers' text responses (structured outputs are not cached before validation); RAG_GPT_CACHE remains the OAuth cache. Keys are never stored in caches
 or outputs. Cache stores research prompts' responses; keep it private.
 
 Test a connection (one inference request):
@@ -30,9 +30,9 @@ Use the existing correct index and local registry. The remote branch predates
 the local BGE/corpus16 refactor; see migration instructions below. Do not run
 against a Gemini-embedded index with BGE embeddings or vice versa.
 
-Judge with a separate model and new output:
+Judge with a separate model and new output (works with both the remote and local architecture):
 ```fish
-"$PY" -m rag_lab.evaluation.benchmark judge --judge-provider gemini \
+"$PY" -m rag_lab.evaluation.provider_judge --judge-provider gemini \
     --judge-model "$RAG_GEMINI_MODEL" --input eval/generated_groq120b_paired3.jsonl \
     --output eval/judged_groq120b_gemini.jsonl
 ```
@@ -51,7 +51,7 @@ Gemini uses generateContent JSON Schema plus Pydantic validation. Neither
 schema adherence nor model judging establishes scientific correctness.
 No automatic retries or provider switching on 429: preserve completed rows and
 retry the same experiment after the provider's limit permits. Max output is
-4096 tokens for API providers; incomplete responses fail rather than being
+4096 tokens by default for API providers (override with RAG_LLM_MAX_OUTPUT_TOKENS before starting an experiment); incomplete responses fail rather than being
 silently accepted. Provider-specific API and model availability must be tested
 with a real key. No live requests are made in unit CI.
 
@@ -63,3 +63,5 @@ code blindly. Fetch this branch, retrieve the new provider files and the
 migration utility, and run the utility with --check first. See its --help.
 It applies narrowly scoped changes to the local manifest-bound generator,
 preserving the BGE index and all existing experiment identity checks.
+
+New generation rows also record per-question inference_usage (requests, cache hits and token deltas), including optional verification using the shared transport. The provider_judge command binds the exact generation file, rubric and judge inference identity before judging; use a new judge output for a changed generation file. The notebook `notebooks/12_provider_pipeline.ipynb` is a thin entry point for the local BGE corpus experiment.
