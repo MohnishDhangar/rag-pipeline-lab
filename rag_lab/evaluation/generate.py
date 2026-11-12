@@ -6,7 +6,8 @@ for Gemini query embeddings. Run after ChatGPT OAuth login and models selection.
 import argparse, json, os
 from pathlib import Path
 
-from rag_lab.llms.gpt_adapter import build_chat_model, InferenceError
+from rag_lab.llms.gpt_adapter import InferenceError
+from rag_lab.llms.factory import build_chat_model, resolve_provider, inference_identity
 from rag_lab.utils import append_jsonl
 from rag_lab.evaluation.benchmark import read_jsonl
 from rag_lab.knowledge.paper_registry import PaperRegistry
@@ -42,8 +43,8 @@ def usable_generation(row):
     # An explicitly recorded CRAG abstention is a valid experimental outcome,
     # not a generation failure. It MUST remain counted on resumed runs.
     if row.get("generation_status") == "abstained":
-        trace=(row.get("trace") or {}).get("crag") or {}
-        return (row.get("strategy") == "crag"
+        trace=(row.get("trace") or {}).get(row.get("strategy")) or {}
+        return (row.get("strategy") in ("crag","crag_v6")
                 and trace.get("action") == "abstain"
                 and row.get("answer") == "Insufficient retrieved evidence to answer this question.")
     return bool(row.get("answer") and row.get("contexts")
@@ -54,7 +55,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
              verify_on_warning=False, chroma_path=None, chroma_collection=None,
              adaptive_k=4, adaptive_fetch_k=20, adaptive_lambda=.5, ids=None,
              crag_max_grades=2, crag_pool_k=28, controller_grader_budget=1,
-             controller_require_colbert=False, eval_set=None):
+             controller_require_colbert=False, eval_set=None, provider=None):
     if "adaptive_v2" in strategies and (list(backends)!=["dense"] or graph_path):
         raise ValueError("adaptive_v2 runs once under --backends dense without graph")
     if crag_max_grades not in (1,2) or controller_grader_budget not in (0,1,2):
@@ -83,10 +84,17 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                        "max_grader_calls":controller_grader_budget,
                        "crag_pool_k":crag_pool_k,
                        "require_colbert":controller_require_colbert}
+    selected_provider=resolve_provider(provider)
+    llm=build_chat_model(model=model, provider=provider) if provider else build_chat_model(model=model)
+    identity=inference_identity(selected_provider,model or llm.model_name)
+    previous=read_jsonl(results)
+    for r in previous:
+        if r.get("inference") != identity:
+            # Historical OAuth checkpoints have no provider metadata. Do not mix them with new runs.
+            raise ValueError("Inference configuration mismatch; use a new output filename")
     done = {(r.get("strategy"), r.get("backend"), r.get("id"),
              config_key(r.get("strategy"), r))
-            for r in read_jsonl(results) if usable_generation(r)}
-    llm=build_chat_model(model=model)
+            for r in previous if usable_generation(r)}
     count=0
     for backend_name in backends:
         store=create_backend(backend_name,root,chroma_path,chroma_collection)
@@ -138,13 +146,13 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                     from rag_lab.core.pipeline import EvidenceAwarePipeline
                     # Do not feed the gold question_type to the runtime pipeline.
                     predicted = classify_question(q["question"])
-                    result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning).run_with_trace(
+                    result=EvidenceAwarePipeline(strategy,verify_on_warning=verify_on_warning,verifier=getattr(llm,'_transport',None)).run_with_trace(
                         q["question"],cross_document=predicted.question_type=="cross_document"
                     )
                     # Deliberate CRAG abstention is part of the experiment.
                     # Save it, count it, and continue to all remaining arms.
-                    crag_trace=(result.trace or {}).get("crag") or {}
-                    abstained=(name=="crag" and crag_trace.get("action")=="abstain"
+                    crag_trace=(result.trace or {}).get(name) or {}
+                    abstained=(name in ("crag","crag_v6") and crag_trace.get("action")=="abstain"
                                and result.answer ==
                                "Insufficient retrieved evidence to answer this question.")
                     if not result.contexts and not abstained:
@@ -161,7 +169,7 @@ def generate(root, results, strategies, backends, model=None, limit=None, graph_
                          "question_type":q.get("question_type"),
                          "ground_truth":q.get("ground_truth"),
                          "source_documents":q.get("source_documents"),
-                         "model":model or llm.model_name,
+                         "model":model or llm.model_name,"provider":selected_provider,"inference":identity,
                          "runtime_question_type":predicted.question_type,
                          "generation_status":"abstained" if abstained else "answered",
                          **({"retrieval_config":config} if config is not None else {})}
@@ -180,6 +188,7 @@ def main():
     p.add_argument("--eval-set",type=Path,default=None,
                    help="JSON evaluation split; default eval/eval_set.json")
     p.add_argument("--model")
+    p.add_argument("--provider", choices=("chatgpt_oauth","groq","gemini"))
     p.add_argument("--strategies",nargs="+",default=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"])
     p.add_argument("--backends",nargs="+",default=["dense"],choices=["dense","colbert"])
     p.add_argument("--limit",type=int)
@@ -204,6 +213,6 @@ def main():
                                 a.adaptive_k,a.adaptive_fetch_k,a.adaptive_lambda,a.ids,
                                 a.crag_max_grades,a.crag_pool_k,
                                 a.controller_grader_budget,a.controller_require_colbert,
-                                a.eval_set))
+                                a.eval_set, provider=a.provider))
 
 if __name__=="__main__": main()

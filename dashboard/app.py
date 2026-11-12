@@ -16,29 +16,28 @@ st.caption("Adaptive scientific retrieval, source evidence, and controlled evalu
 tab_live,tab_results,tab_sources=st.tabs(["Ask research questions","Benchmark explorer","Evidence graph"])
 
 with tab_live:
-    st.write("Uses local OAuth credentials and your selected ChatGPT account model.")
+    st.write("Uses locally configured inference credentials. Select a provider and model.")
+    provider=st.selectbox("Inference provider",["chatgpt_oauth","groq","gemini"])
+    model=st.text_input("Model identifier (blank uses provider environment/default)")
     q=st.text_area("Scientific question",placeholder="Compare PINNs and MeshGraphNets...")
     backend=st.selectbox("Retrieval backend",["dense","colbert"])
     strategy=st.selectbox("Strategy",["adaptive","naive","multi_query","rag_fusion",
-                                     "hyde","step_back","decomposition"])
+                                     "hyde","step_back","decomposition","crag","crag_v6"])
     use_graph=st.checkbox("Augment retrieval with scientific evidence graph",value=False)
     verify_flag=st.checkbox("GPT verify answers with uncertain evidence (extra inference)",value=False)
     if st.button("Generate answer",disabled=not q.strip()):
         try:
             from rag_lab.evaluation.generate import create_backend, make_strategy
             from rag_lab.application.serving import serving_store
-            from rag_lab.llms.gpt_adapter import build_chat_model
+            from rag_lab.llms.factory import build_chat_model
             from rag_lab.routing.adaptive_router import AdaptiveRouter
-            import os
-            model=os.environ.get("RAG_GPT_MODEL")
-            if not model: raise ValueError("Set RAG_GPT_MODEL after OAuth model discovery")
             raw_store=create_backend(backend,Path("."))
             store,registry=serving_store(raw_store,registry_path=Path("eval/eval_set.json"))
             if use_graph:
                 from rag_lab.retrieval.evidence_augmented import EvidenceAugmentedVectorStore
                 from rag_lab.knowledge.evidence_graph import EvidenceGraph
                 store=EvidenceAugmentedVectorStore(store,EvidenceGraph.load("data/evidence_graph.json"))
-            llm=build_chat_model(model=model)
+            llm=build_chat_model(model=model or None,provider=provider)
             if strategy=="adaptive":
                 names=["naive","multi_query","rag_fusion","hyde","step_back","decomposition"]
                 alternatives={n:make_strategy(n,store,llm) for n in names}
@@ -47,10 +46,10 @@ with tab_live:
             else:
                 runner=make_strategy(strategy,store,llm,registry=registry)
             from rag_lab.core.pipeline import EvidenceAwarePipeline
-            result=EvidenceAwarePipeline(runner,verify_on_warning=verify_flag).run_with_trace(
+            result=EvidenceAwarePipeline(runner,verify_on_warning=verify_flag,verifier=getattr(llm,'_transport',None)).run_with_trace(
                 q,cross_document=("compare" in q.lower() or "contrast" in q.lower())
             )
-            st.session_state["current_result"]=result.to_dict()
+            st.session_state["current_result"]={**result.to_dict(),"provider":provider,"model":llm.model_name}
         except Exception as exc:
             st.error("The request failed. Check the local application logs for details.")
             import logging

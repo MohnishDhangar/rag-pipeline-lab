@@ -53,3 +53,10 @@ eval/generated_four_way_pilot.jsonl
 eval/judged_four_way_pilot.jsonl
 eval/four_way_pilot_summary.json
 eval/generated_adaptive_v2_pilot.jsonl
+
+# Provider-specific generated experiment data (do not commit research outputs)
+eval/generated_groq*.jsonl
+eval/generated_gemini*.jsonl
+eval/judged_groq*.jsonl
+eval/judged_gemini*.jsonl
+eval/*.jsonl.manifest.json

@@ -22,6 +22,12 @@ benchmark is a starting point, **not evidence of a measured performance win**.
   paper-level retrieval metrics, resumable custom GPT judging, optional RAGAS.
 - **Demo:** Streamlit dashboard with source inspection and experiment comparison.
 
+## Inference providers
+
+Groq, Gemini, and ChatGPT OAuth are available through the shared inference factory.
+See [inference provider setup](docs/inference_providers.md) for API keys, model selection,
+provider-specific judging, and the local-checkpoint integration procedure.
+
 ## Install and authorize GPT
 
 Python 3.10 or later. In a terminal on your own computer:
