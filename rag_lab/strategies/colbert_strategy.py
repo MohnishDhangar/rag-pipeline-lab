@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 """
 ColBERTStrategy — wraps ColBERTVectorStoreShim behind the same
 .retrieve()/.run() interface every other strategy in rag_lab.strategies
@@ -28,7 +30,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from rag_lab.retrieval.colbert_backend import ColBERTVectorStoreShim
 
 
-class ColBERTStrategy:
+class ColBERTStrategy(TraceableStrategy):
     """Naive RAG (single retrieval, no query translation) using the
     ColBERT/PyLate backend instead of dense Chroma retrieval."""
 
@@ -42,7 +44,7 @@ class ColBERTStrategy:
         self.retriever = colbert_vectorstore.as_retriever(search_kwargs={"k": k})
         self.llm = llm
         self.answer_prompt = ChatPromptTemplate.from_template(
-            "Answer the question based only on the following context:\n"
+            "Answer only from the context. Cite supporting passages using their exact [SOURCE ...] labels and never invent citations. Context:\n"
             "{context}\n\nQuestion: {question}"
         )
 
@@ -51,6 +53,7 @@ class ColBERTStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
-        context = "\n\n".join(d.page_content for d in docs)
+        self.last_contexts = docs
+        context = "\n\n".join(format_context(d) for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

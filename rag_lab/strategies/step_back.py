@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 """
 Step-back retrieval strategy.
 
@@ -65,7 +67,7 @@ STEP_BACK_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-class StepBackStrategy:
+class StepBackStrategy(TraceableStrategy):
     """Generates a more abstract version of the query, retrieves using
     both the original specific query and the step-back query, and
     answers using the combined context from both."""
@@ -108,8 +110,9 @@ class StepBackStrategy:
         step_back_query = self.generate_step_back_query(query)
         normal_docs = call_with_backoff(lambda: self.retriever.invoke(query))
         step_back_docs = call_with_backoff(lambda: self.retriever.invoke(step_back_query))
-        normal_context = "\n\n".join(d.page_content for d in normal_docs)
-        step_back_context = "\n\n".join(d.page_content for d in step_back_docs)
+        self.last_contexts = normal_docs + step_back_docs
+        normal_context = "\n\n".join(format_context(d) for d in normal_docs)
+        step_back_context = "\n\n".join(format_context(d) for d in step_back_docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({
             "normal_context": normal_context,

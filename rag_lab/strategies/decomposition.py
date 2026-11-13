@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 """
 Decomposition retrieval strategy.
 
@@ -44,7 +46,7 @@ RECURSIVE_ANSWER_PROMPT = ChatPromptTemplate.from_template(
 )
 
 
-class DecompositionStrategy:
+class DecompositionStrategy(TraceableStrategy):
     """Splits a complex query into sub-questions, answers each one
     recursively (building on prior sub-answers), then synthesizes
     a final answer from the full Q&A chain."""
@@ -92,10 +94,12 @@ class DecompositionStrategy:
     def run(self, query: str) -> str:
         sub_questions = self.decompose(query)
         qa_pairs: List[Tuple[str, str]] = []
+        self.last_contexts = []
 
         for sub_q in sub_questions:
             docs = self.retriever.invoke(sub_q)
-            context = "\n\n".join(d.page_content for d in docs)
+            self.last_contexts.extend(docs)
+            context = "\n\n".join(format_context(d) for d in docs)
             formatted_history = (
                 self._format_qa_pairs(qa_pairs) if qa_pairs else "No prior context."
             )

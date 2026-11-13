@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
@@ -6,7 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import VectorStore
 
 
-class RaptorStrategy:
+class RaptorStrategy(TraceableStrategy):
     """Queries a pre-built RAPTOR tree (leaf chunks + recursive cluster
     summaries at every level), all stored flat in one Chroma collection.
     Retrieval naturally selects whichever level's embedding is closest
@@ -27,8 +29,9 @@ class RaptorStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
+        self.last_contexts = docs
         context = "\n\n".join(
-            f"[Level {d.metadata.get('level', '?')}] {d.page_content}"
+            f"[Level {d.metadata.get('level', '?')}] {format_context(d)}"
             for d in docs
         )
         chain = self.answer_prompt | self.llm | StrOutputParser()

@@ -1,3 +1,5 @@
+from rag_lab.knowledge.citations import format_context
+from rag_lab.core.trace import TraceableStrategy
 from typing import List
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -24,14 +26,14 @@ def reciprocal_rank_fusion(
     return [doc_lookup[key] for key in reranked_keys]
 
 
-class RagFusionStrategy:
+class RagFusionStrategy(TraceableStrategy):
     def __init__(self, vectorstore: VectorStore, llm: BaseChatModel, k: int = 4, rrf_k: int = 60):
         self.retriever = vectorstore.as_retriever(search_kwargs={"k": k})
         self.llm = llm
         self.rrf_k = rrf_k
         self.query_gen_chain = MULTI_QUERY_PROMPT | llm | LineListOutputParser()
         self.answer_prompt = ChatPromptTemplate.from_template(
-            "Answer the question based only on the following context:\n"
+            "Answer only from the context. Cite supporting passages using their exact [SOURCE ...] labels and never invent citations. Context:\n"
             "{context}\n\nQuestion: {question}"
         )
 
@@ -45,6 +47,7 @@ class RagFusionStrategy:
 
     def run(self, query: str) -> str:
         docs = self.retrieve(query)
-        context = "\n\n".join(d.page_content for d in docs)
+        self.last_contexts = docs
+        context = "\n\n".join(format_context(d) for d in docs)
         chain = self.answer_prompt | self.llm | StrOutputParser()
         return chain.invoke({"context": context, "question": query})

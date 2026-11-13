@@ -1,56 +1,51 @@
+"""Build an aligned PyLate/PLAID index; refuse accidental index overwrite.
+
+1. python -m rag_lab.retrieval.export_colbert_leaves --root .
+2. python -m rag_lab.retrieval.colbert_index_build --root . --batch-size 4
+3. python -m rag_lab.retrieval.colbert_health --root . --query "PINN residual"
+
+Use --overwrite ONLY when intentionally replacing an existing index.
+CPU and small batches are recommended for 8GB RAM laptops.
 """
-Standalone ColBERT indexing script, run via whichever Python
-environment PyLate installs cleanly into — NOT inside the main
-Jupyter notebook. Run with the environment's explicit python path,
-never a bare `python` command:
-
-    ~/ragatouille_env/bin/python rag_lab/retrieval/colbert_index_build.py
-
-(the venv name is stale from the earlier RAGatouille attempt — fine to
-reuse if it's confirmed Python 3.11, or build a fresh ~/pylate_env the
-same way. What matters is using the environment's own explicit binary
-path, to avoid the earlier activation mixup where a bare `python`
-picked up an unrelated 3.14 interpreter.)
-
-Writes TWO files: the PLAID index itself, and id_to_text.json — the
-main notebook environment needs the latter to map retrieval results
-back to source text, since PyLate's index never stores text directly.
-"""
-
-import json
+from __future__ import annotations
+import argparse,json
 from pathlib import Path
-from pylate import indexes, models
+from rag_lab.retrieval.colbert_backend import validate_mappings
+from rag_lab.retrieval.colbert_manifest import write_manifest
 
-project_root = Path("/home/mohnish/Codes/rag-lab")  # adjust if needed
 
-with open(project_root / "data" / "leaf_texts.json") as f:
-    leaf_texts = json.load(f)
+def build(root, *, batch_size=4, overwrite=False, model_name="lightonai/colbertv2.0"):
+    root=Path(root)
+    data=root/"data"
+    docs=json.loads((data/"leaf_texts.json").read_text(encoding="utf-8"))
+    metadata=json.loads((data/"id_to_metadata.json").read_text(encoding="utf-8"))
+    docids=[f"chunk_{i}" for i in range(len(docs))]
+    texts=dict(zip(docids,docs))
+    validate_mappings(texts,metadata)
+    index_folder=data/"colbert_index"
+    if index_folder.exists() and any(index_folder.iterdir()) and not overwrite:
+        raise FileExistsError(f"ColBERT index exists: {index_folder}. Set --overwrite to rebuild")
+    if batch_size<1: raise ValueError("batch_size must be positive")
+    from pylate import indexes,models
+    model=models.ColBERT(model_name_or_path=model_name)
+    embeddings=model.encode(docs,batch_size=batch_size,is_query=False,show_progress_bar=True)
+    index=indexes.PLAID(index_folder=str(index_folder),override=overwrite)
+    index.add_documents(documents_ids=docids,documents_embeddings=embeddings)
+    target=data/"id_to_text.json"
+    target.write_text(json.dumps(texts,ensure_ascii=False),encoding="utf-8")
+    write_manifest(root,texts,metadata,model_name=model_name)
+    return len(docs)
 
-document_ids = [f"chunk_{i}" for i in range(len(leaf_texts))]
-id_to_text = dict(zip(document_ids, leaf_texts))
 
-model = models.ColBERT(model_name_or_path="lightonai/colbertv2.0")
-#model = models.ColBERT(model_name_or_path="colbert-ir/colbertv2.0")
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--root",type=Path,default=Path("."))
+    p.add_argument("--batch-size",type=int,default=4)
+    p.add_argument("--overwrite",action="store_true")
+    p.add_argument("--model-name",default="lightonai/colbertv2.0")
+    a=p.parse_args()
+    print("Indexed passages:",build(a.root,batch_size=a.batch_size,
+                                   overwrite=a.overwrite,model_name=a.model_name))
 
-document_embeddings = model.encode(
-    leaf_texts,
-    batch_size=32,
-    is_query=False,
-    show_progress_bar=True,
-)
 
-index = indexes.PLAID(
-    index_folder=str(project_root / "data" / "colbert_index"),
-    override=True,
-)
-index.add_documents(
-    documents_ids=document_ids,
-    documents_embeddings=document_embeddings,
-)
-
-with open(project_root / "data" / "id_to_text.json", "w") as f:
-    json.dump(id_to_text, f)
-
-print(f"Indexed {len(leaf_texts)} chunks.")
-print(f"Index: {project_root / 'data' / 'colbert_index'}")
-print(f"id_to_text: {project_root / 'data' / 'id_to_text.json'}")
+if __name__=="__main__":main()
