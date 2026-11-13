@@ -8,7 +8,7 @@ from pathlib import Path
 from rag_lab.evaluation.jsonl_io import read_jsonl
 from rag_lab.evaluation.identity import row_fingerprint, RUBRIC_VERSION
 from rag_lab.evaluation.judge import evaluate_row
-from rag_lab.llms.factory import build_transport, judge_selection, inference_identity
+from rag_lab.llms.factory import build_transport, judge_selection, inference_identity, usage_snapshot, usage_delta
 from rag_lab.llms.gpt_adapter import InferenceError
 from rag_lab.utils import append_jsonl
 
@@ -66,13 +66,15 @@ def judge_file(input_path, output_path, *, provider=None, model=None, transport=
     count=0
     for r in pending:
         key=row_key(r)
+        before=usage_snapshot(transport)
         try:
             scores=evaluate_row(r,transport)
         except (InferenceError, ConnectionError, TimeoutError) as exc:
             print(f"Judge interrupted at {key[:3]}; {count} new rows preserved: {exc}")
             break
         append_jsonl(output_path,{"strategy":key[0],"backend":key[1],"id":key[2],
-                                 "input_fingerprint":key[3],"judge_inference":identity,**scores})
+                                 "input_fingerprint":key[3],"judge_inference":identity,
+                                 "judge_inference_usage":usage_delta(transport,before),**scores})
         count+=1
     return count
 

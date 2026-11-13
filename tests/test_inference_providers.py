@@ -4,6 +4,7 @@ import requests
 from pydantic import BaseModel
 from rag_lab.llms.factory import build_chat_model, resolve_provider, inference_identity
 from rag_lab.llms.providers import APITransport
+from rag_lab.llms.rate_limits import RetryPolicy
 from rag_lab.llms.gpt_adapter import InferenceError
 
 class Grade(BaseModel):
@@ -61,7 +62,8 @@ def test_gemini_request_roles_and_usage(monkeypatch):
 @pytest.mark.parametrize("response,code",[(Response({},429),"rate_limit"),(groq("truncated","length"),"incomplete_response")])
 def test_provider_failure(response,code,monkeypatch):
     monkeypatch.delenv("RAG_LLM_CACHE",raising=False)
-    t=APITransport("groq","test",http=Session(response),api_key="secret")
+    t=APITransport("groq","test",http=Session(response),api_key="secret",
+                   retry_policy=RetryPolicy(max_retries=0))
     with pytest.raises(InferenceError) as err:
         t.generate([{"role":"user","content":"q"}])
     assert err.value.code==code

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import logging
+import time
 import json
 import os
 import re
@@ -15,6 +17,8 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import RunnableLambda
 
 from rag_lab.core.cache import ResponseCache
+from .rate_limits import (RetryPolicy, RETRYABLE_STATUS, known_cooldown,
+                          retry_delay, headers_lower, retry_after)
 from .gpt_adapter import (
     GPTTransport, InferenceError, _convert, build_chat_model as oauth_model, parse_object,
 )
@@ -23,7 +27,8 @@ PROVIDERS = ("chatgpt_oauth", "groq", "gemini")
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 MODEL_ENV = {"chatgpt_oauth": "RAG_GPT_MODEL", "groq": "RAG_GROQ_MODEL",
              "gemini": "RAG_GEMINI_MODEL"}
-ADAPTER_VERSION = "provider-adapter-v1"
+ADAPTER_VERSION = "provider-adapter-v2"
+LOG = logging.getLogger(__name__)
 MAX_OUTPUT_TOKENS = 4096
 
 def output_budget():
@@ -55,14 +60,16 @@ def inference_identity(provider, model):
             "adapter_version": ADAPTER_VERSION,
             "max_output_tokens": None if provider == "chatgpt_oauth" else output_budget(),
             "structured_output": "prompt-json" if provider == "chatgpt_oauth" else "provider-json-schema",
-            "cache_enabled": bool(os.getenv("RAG_GPT_CACHE" if provider == "chatgpt_oauth" else "RAG_LLM_CACHE"))}
+            "cache_enabled": bool(os.getenv("RAG_GPT_CACHE" if provider == "chatgpt_oauth" else "RAG_LLM_CACHE")),
+            **({"retry_policy": RetryPolicy.from_env().identity()} if provider != "chatgpt_oauth" else {})}
 
 def _schema(value):
     return value.model_json_schema() if hasattr(value, "model_json_schema") else copy.deepcopy(value)
 
 class APITransport:
-    """Non-streaming API transport; all failures stop a benchmark rather than silently changing model."""
-    def __init__(self, provider, model, *, http=None, api_key=None):
+    """Non-streaming API transport with bounded retries; never changes model."""
+    def __init__(self, provider, model, *, http=None, api_key=None, retry_policy=None,
+                 sleep=None, clock=None, jitter=None):
         if provider not in ("groq", "gemini"):
             raise ValueError("APITransport requires groq or gemini")
         self.provider, self.model = provider, resolve_model(provider, model)
@@ -72,7 +79,17 @@ class APITransport:
                                   else os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
         if not self.api_key:
             raise ValueError("Set GROQ_API_KEY" if provider == "groq" else "Set GEMINI_API_KEY or GOOGLE_API_KEY")
-        self.calls = 0
+        self.calls = 0  # all actual HTTP attempts, including rejected requests
+        self.successful_responses = 0
+        self.retry_attempts = 0
+        self.rate_limit_events = 0
+        self.retry_wait_seconds = 0.0
+        self.cooldown_wait_seconds = 0.0
+        self.retry_policy = retry_policy or RetryPolicy.from_env()
+        self._sleep = sleep or time.sleep
+        self._clock = clock or time.monotonic
+        self._jitter = jitter
+        self._cooldown_until = 0.0
         self.cache_hits = 0
         self.usage_totals = dict(input_tokens=0, output_tokens=0, total_tokens=0)
         self.cache = ResponseCache(os.environ["RAG_LLM_CACHE"]) if os.getenv("RAG_LLM_CACHE") else None
@@ -122,6 +139,71 @@ class APITransport:
             raise InferenceError(f"{self.provider} returned no answer text", code="empty_response")
         return text, usage
 
+    def _post_with_retry(self, url, headers, payload):
+        policy = self.retry_policy
+        spent = 0.0
+        cooldown = max(0.0, self._cooldown_until - self._clock())
+        if cooldown:
+            if cooldown > policy.max_wait_seconds:
+                raise InferenceError(
+                    f"{self.provider} known rate-limit cooldown exceeds wait budget",
+                    code="rate_limit", status=429)
+            LOG.warning("%s cooldown: waiting %.2fs before next request", self.provider, cooldown)
+            self._sleep(cooldown)
+            self.cooldown_wait_seconds += cooldown
+            spent += cooldown
+        for attempt in range(policy.max_retries + 1):
+            self.calls += 1
+            if attempt:
+                self.retry_attempts += 1
+            response_headers = {}
+            try:
+                response = self.http.post(
+                    url, headers={**headers, "Content-Type": "application/json"},
+                    json=payload, timeout=(20, 240))
+            except requests.ConnectTimeout:
+                # Requests documents ConnectTimeout as safe to retry.
+                status = None
+                error = InferenceError(f"{self.provider} connection timed out",
+                                       code="transport_error")
+            except requests.RequestException as exc:
+                # A read timeout/disconnect may have incurred billable inference.
+                # Do not silently duplicate an ambiguous POST.
+                raise InferenceError(f"{self.provider} transport interrupted: {type(exc).__name__}",
+                                     code="transport_error") from None
+            else:
+                response_headers = headers_lower(response.headers)
+                if response.ok:
+                    self._cooldown_until = self._clock() + known_cooldown(
+                        self.provider, response_headers, policy)
+                    return response
+                status = response.status_code
+                if status == 429:
+                    self.rate_limit_events += 1
+                code = {401: "authentication", 403: "permission", 429: "rate_limit"}.get(status, "http_error")
+                hint = retry_after(response_headers.get("retry-after"))
+                suffix = f"; Retry-After={hint:g}" if hint is not None else ""
+                error = InferenceError(f"{self.provider} HTTP {status}{suffix}",
+                                       code=code, status=status)
+                if status not in RETRYABLE_STATUS:
+                    raise error
+            delay = retry_delay(self.provider, status, response_headers, attempt,
+                                policy, jitter=self._jitter)
+            # Keep a known 429 cooldown even when stopping after the final attempt.
+            if status == 429:
+                self._cooldown_until = max(self._cooldown_until, self._clock() + delay)
+            if attempt >= policy.max_retries or spent + delay > policy.max_wait_seconds:
+                LOG.warning("%s retry budget exhausted (attempts=%d, waited=%.2fs, next=%.2fs)",
+                            self.provider, attempt + 1, spent, delay)
+                raise error
+            LOG.warning("%s %s: retry %d/%d in %.2fs",
+                        self.provider, status if status is not None else "connect timeout",
+                        attempt + 1, policy.max_retries, delay)
+            self._sleep(delay)
+            self.retry_wait_seconds += delay
+            spent += delay
+        raise AssertionError("unreachable")
+
     def generate(self, input, instructions=None, *, schema=None):
         url, headers, payload = self._request(input, instructions, schema)
         # Do not cache unvalidated structured output. A schema-invalid response
@@ -132,24 +214,12 @@ class APITransport:
             if cached:
                 self.cache_hits += 1
                 return cached[0], {**cached[1], "cached": True}
-        self.calls += 1
-        try:
-            response = self.http.post(url, headers={**headers, "Content-Type": "application/json"},
-                                      json=payload, timeout=(20, 240))
-        except requests.RequestException as exc:
-            raise InferenceError(f"{self.provider} transport interrupted: {type(exc).__name__}",
-                                 code="transport_error") from None
-        if not response.ok:
-            status = response.status_code
-            code = {401: "authentication", 403: "permission", 429: "rate_limit"}.get(status, "http_error")
-            retry = response.headers.get("Retry-After", "")
-            suffix = f"; Retry-After={retry}" if retry.isdigit() else ""
-            # No response body, headers or credential values in errors/logs.
-            raise InferenceError(f"{self.provider} HTTP {status}{suffix}", code=code, status=status)
+        response = self._post_with_retry(url, headers, payload)
         try:
             text, usage = self._decode(response.json())
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise InferenceError(f"{self.provider} invalid response", code="invalid_response") from None
+        self.successful_responses += 1
         for field in self.usage_totals:
             self.usage_totals[field] += usage[field]
         if key:
@@ -227,6 +297,8 @@ def usage_snapshot(llm):
     totals = getattr(transport, "usage_totals", {}) or {}
     return {"requests": getattr(transport, "calls", 0),
             "cache_hits": getattr(transport, "cache_hits", 0),
+            **{k: getattr(transport, k, 0) for k in ("successful_responses", "retry_attempts",
+                 "rate_limit_events", "retry_wait_seconds", "cooldown_wait_seconds")},
             **{k: totals.get(k, 0) for k in ("input_tokens", "output_tokens", "total_tokens")}}
 
 def usage_delta(llm, before):

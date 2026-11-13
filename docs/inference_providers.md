@@ -49,8 +49,7 @@ Run notebooks from the repository environment. Never commit real keys.
 Groq uses non-streaming JSON Schema best-effort output plus Pydantic validation;
 Gemini uses generateContent JSON Schema plus Pydantic validation. Neither
 schema adherence nor model judging establishes scientific correctness.
-No automatic retries or provider switching on 429: preserve completed rows and
-retry the same experiment after the provider's limit permits. Max output is
+No provider switching on 429. Bounded request-level retries preserve the same provider, model and payload; exhausted retries preserve completed rows. Max output is
 4096 tokens by default for API providers (override with RAG_LLM_MAX_OUTPUT_TOKENS before starting an experiment); incomplete responses fail rather than being
 silently accepted. Provider-specific API and model availability must be tested
 with a real key. No live requests are made in unit CI.
@@ -65,3 +64,59 @@ It applies narrowly scoped changes to the local manifest-bound generator,
 preserving the BGE index and all existing experiment identity checks.
 
 New generation rows also record per-question inference_usage (requests, cache hits and token deltas), including optional verification using the shared transport. The provider_judge command binds the exact generation file, rubric and judge inference identity before judging; use a new judge output for a changed generation file. The notebook `notebooks/12_provider_pipeline.ipynb` is a thin entry point for the local BGE corpus experiment.
+
+## Rate-limit handling (adapter v2)
+
+Groq and Gemini API transports now retry the *individual* failed HTTP request,
+not the entire question. The OAuth backend is unchanged. Defaults:
+
+| Environment variable | Default | Meaning |
+|---|---:|---|
+| RAG_LLM_MAX_RETRIES | 4 | Additional attempts per logical request (max 20) |
+| RAG_LLM_MAX_RETRY_WAIT | 180 | Cumulative planned sleep budget per logical request, seconds |
+| RAG_GROQ_TOKEN_FLOOR | 1000 | Proactive cooldown when reported remaining TPM is at/below this threshold |
+
+HTTP 429 honors numeric or HTTP-date Retry-After plus small positive jitter.
+For Groq, zero daily remaining requests respects the daily reset even when
+a shorter token reset is present. A long reset exceeding the wait budget
+stops immediately; it is never shortened to force a retry. Missing retry
+hints use exponential backoff (2, 4, 8, 16 seconds, plus jitter, capped at
+30 seconds before jitter). 500/502/503/504 and connection-establishment
+timeouts retry within the same budget. Invalid requests, auth/permission
+errors, ambiguous read timeouts, incomplete or invalid model responses
+are not automatically retried. A read timeout might have incurred usage.
+
+Successful Groq responses with low remaining TPM or zero remaining RPD
+schedule a cooldown for the next uncached request. Groq request headers
+represent RPD, not RPM; token headers represent TPM. This is a conservative
+single-transport controller, not a distributed token bucket. Other clients
+and daily token limits can still cause 429s; check the organization's actual
+limits at https://console.groq.com/settings/limits. The cooldown is in memory,
+not shared across processes or persisted across restarts.
+
+Telemetry: requests counts actual POST attempts (including rejected ones);
+successful_responses counts decoded nonempty responses; retry_attempts counts
+additional POSTs; rate_limit_events counts HTTP 429s; retry_wait_seconds and
+cooldown_wait_seconds report planned sleep seconds; token totals reflect
+returned successful usage, not unknown usage from interrupted requests.
+Generation and provider_judge rows record the deltas for the completed question
+or judge call. A question interrupted after exhausting the policy may still
+require replay; its incomplete usage is not represented in completed rows.
+
+Policy settings and adapter version are part of inference identity. The
+local manifest also fingerprints source code: use NEW output filenames
+after upgrading, even if the provider/model remains identical. Existing
+completed generation artifacts may be judged, but use a new judge output.
+Do not edit the old manifest to bypass it.
+
+Example (Fish):
+```fish
+set -gx RAG_LLM_MAX_RETRIES 4
+set -gx RAG_LLM_MAX_RETRY_WAIT 180
+set -gx RAG_GROQ_TOKEN_FLOOR 1000
+```
+
+For a long batch, run a single process per provider/model and avoid launching
+other notebook requests simultaneously. A local token-per-day budget or
+provider Batch API is a separate scaling option; this policy does not bypass
+provider quotas or guarantee a 30-question run fits the daily allowance.
